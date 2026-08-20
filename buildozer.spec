@@ -25,16 +25,10 @@ android.private_storage = True
 android.allow_backup = False
 android.uses_cleartext_connection = False
 
-# Automatically accept Android SDK licenses in GitHub Actions
 android.accept_sdk_license = True
 
-# Skip SDK updates after required packages are installed
-android.skip_update = False
-
-# Use the recommended NDK downloaded by python-for-android
 android.ndk = 28c
 
-# Build APK for debug
 android.debug_artifact = apk
 
 
