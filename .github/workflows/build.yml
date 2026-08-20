@@ -132,6 +132,48 @@ jobs:
       # ==========================================
       # 9. Build Android APK
       # ==========================================
+            # ==========================================
+      # 9. Install Android SDK Build Tools
+      # ==========================================
+      - name: Install Android SDK Components
+        run: |
+          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
+
+          echo "Android SDK: $SDK_ROOT"
+
+          mkdir -p "$SDK_ROOT/licenses"
+
+          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" \
+            > "$SDK_ROOT/licenses/android-sdk-license"
+
+          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" \
+            >> "$SDK_ROOT/licenses/android-sdk-license"
+
+          SDKMANAGER="$SDK_ROOT/tools/bin/sdkmanager"
+
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          fi
+
+          echo "Using sdkmanager:"
+          echo "$SDKMANAGER"
+
+          yes | "$SDKMANAGER" \
+            --sdk_root="$SDK_ROOT" \
+            --licenses || true
+
+          "$SDKMANAGER" \
+            --sdk_root="$SDK_ROOT" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+          echo "=============================="
+          echo "BUILD TOOLS"
+          echo "=============================="
+
+          find "$SDK_ROOT/build-tools" -maxdepth 2 -type f \
+            -name "aidl" -print
       - name: Build APK
         run: |
           buildozer -v android debug
