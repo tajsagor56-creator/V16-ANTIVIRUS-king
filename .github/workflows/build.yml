@@ -13,23 +13,23 @@ jobs:
     steps:
 
       # ==========================================
-      # 1. Checkout Repository
+      # 1. Checkout
       # ==========================================
       - name: Checkout Repository
         uses: actions/checkout@v4
 
 
       # ==========================================
-      # 2. Setup Python 3.11
+      # 2. Python
       # ==========================================
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11.16'
+          python-version: '3.11'
 
 
       # ==========================================
-      # 3. Setup Java 17
+      # 3. Java 17
       # ==========================================
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -39,7 +39,7 @@ jobs:
 
 
       # ==========================================
-      # 4. Install System Packages
+      # 4. System packages
       # ==========================================
       - name: Install System Packages
         run: |
@@ -60,11 +60,11 @@ jobs:
 
 
       # ==========================================
-      # 5. Install Python Build Packages
+      # 5. Python build tools
       # ==========================================
-      - name: Install Python Build Packages
+      - name: Install Buildozer
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools wheel
 
           python -m pip install \
             buildozer==1.6.0 \
@@ -73,9 +73,9 @@ jobs:
 
 
       # ==========================================
-      # 6. Check Project
+      # 6. Validate project
       # ==========================================
-      - name: Check Project
+      - name: Validate Project
         run: |
           echo "=============================="
           echo "PROJECT FILES"
@@ -84,42 +84,28 @@ jobs:
           ls -la
 
           echo
-          echo "=============================="
-          echo "PYTHON VERSION"
-          echo "=============================="
-
+          echo "Python:"
           python --version
 
           echo
-          echo "=============================="
-          echo "JAVA VERSION"
-          echo "=============================="
-
+          echo "Java:"
           java -version
 
           echo
-          echo "=============================="
-          echo "BUILDOZER VERSION"
-          echo "=============================="
-
+          echo "Buildozer:"
           buildozer --version
 
+          echo
+          echo "Checking main.py..."
 
-      # ==========================================
-      # 7. Validate main.py
-      # ==========================================
-      - name: Validate Python
-        run: |
           python -m py_compile main.py
 
           echo
-          echo "=============================="
           echo "main.py syntax OK"
-          echo "=============================="
 
 
       # ==========================================
-      # 8. Clean Previous Build
+      # 7. Clean Build
       # ==========================================
       - name: Clean Build
         run: |
@@ -130,68 +116,31 @@ jobs:
 
 
       # ==========================================
-      # 9. Build Android APK
+      # 8. Build APK
       # ==========================================
-            # ==========================================
-      # 9. Install Android SDK Build Tools
-      # ==========================================
-      - name: Install Android SDK Components
-        run: |
-          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
-
-          echo "Android SDK: $SDK_ROOT"
-
-          mkdir -p "$SDK_ROOT/licenses"
-
-          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" \
-            > "$SDK_ROOT/licenses/android-sdk-license"
-
-          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" \
-            >> "$SDK_ROOT/licenses/android-sdk-license"
-
-          SDKMANAGER="$SDK_ROOT/tools/bin/sdkmanager"
-
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-          fi
-
-          echo "Using sdkmanager:"
-          echo "$SDKMANAGER"
-
-          yes | "$SDKMANAGER" \
-            --sdk_root="$SDK_ROOT" \
-            --licenses || true
-
-          "$SDKMANAGER" \
-            --sdk_root="$SDK_ROOT" \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
-          echo "=============================="
-          echo "BUILD TOOLS"
-          echo "=============================="
-
-          find "$SDK_ROOT/build-tools" -maxdepth 2 -type f \
-            -name "aidl" -print
       - name: Build APK
+        env:
+          BUILDOZER_WARN_ON_ROOT: "1"
         run: |
+          echo "=============================="
+          echo "STARTING BUILDOZER"
+          echo "=============================="
+
           buildozer -v android debug
 
 
       # ==========================================
-      # 10. Check APK
+      # 9. Check APK
       # ==========================================
-      - name: Check Generated APK
+      - name: Check APK
         if: always()
         run: |
 
-          echo
           echo "=============================="
           echo "GENERATED APK"
           echo "=============================="
 
-          if ls bin/*.apk >/dev/null 2>&1; then
+          if compgen -G "bin/*.apk" > /dev/null; then
 
             echo "APK FOUND:"
             ls -lh bin/*.apk
@@ -201,11 +150,12 @@ jobs:
             echo "ERROR: APK was not generated."
 
             echo
-            echo "Searching for APK files..."
+            echo "Searching entire project..."
 
-            find . -type f \
+            find . \
+              -type f \
               \( -name "*.apk" -o -name "*.aab" \) \
-              -print
+              -print || true
 
             exit 1
 
@@ -213,7 +163,7 @@ jobs:
 
 
       # ==========================================
-      # 11. Upload APK
+      # 10. Upload APK
       # ==========================================
       - name: Upload APK
         if: success()
