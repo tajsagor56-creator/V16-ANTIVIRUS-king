@@ -4,12 +4,10 @@ on:
   push:
     branches:
       - main
-
   workflow_dispatch:
 
 jobs:
   build:
-
     runs-on: ubuntu-22.04
 
     steps:
@@ -22,22 +20,22 @@ jobs:
 
 
       # ==========================================
-      # PART 02 — Setup Python 3.11
+      # PART 02 — Setup Python
       # ==========================================
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
 
       # ==========================================
-      # PART 03 — Setup Java 17
+      # PART 03 — Setup Java
       # ==========================================
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
 
       # ==========================================
@@ -45,7 +43,6 @@ jobs:
       # ==========================================
       - name: Install System Packages
         run: |
-
           sudo apt-get update
 
           sudo apt-get install -y \
@@ -64,11 +61,10 @@ jobs:
 
 
       # ==========================================
-      # PART 05 — Install Python Build Packages
+      # PART 05 — Install Buildozer
       # ==========================================
       - name: Install Buildozer
         run: |
-
           python -m pip install --upgrade pip
           python -m pip install --upgrade setuptools wheel
 
@@ -83,7 +79,6 @@ jobs:
       # ==========================================
       - name: Check Environment
         run: |
-
           echo "=============================="
           echo "PROJECT"
           echo "=============================="
@@ -92,33 +87,23 @@ jobs:
           ls -la
 
           echo
-          echo "=============================="
-          echo "PYTHON"
-          echo "=============================="
-
+          echo "Python:"
           python --version
 
           echo
-          echo "=============================="
-          echo "JAVA"
-          echo "=============================="
-
+          echo "Java:"
           java -version
 
           echo
-          echo "=============================="
-          echo "BUILDOZER"
-          echo "=============================="
-
+          echo "Buildozer:"
           buildozer --version
 
 
       # ==========================================
-      # PART 07 — Validate main.py
+      # PART 07 — Validate Python
       # ==========================================
       - name: Validate Python
         run: |
-
           echo "=============================="
           echo "CHECKING main.py"
           echo "=============================="
@@ -127,18 +112,16 @@ jobs:
 
           python -m py_compile main.py
 
-          echo
           echo "main.py syntax OK"
 
 
       # ==========================================
-      # PART 08 — Check buildozer.spec
+      # PART 08 — Check Buildozer Spec
       # ==========================================
       - name: Check Buildozer Spec
         run: |
-
           echo "=============================="
-          echo "BUILDOZER SPEC"
+          echo "CHECKING buildozer.spec"
           echo "=============================="
 
           test -f buildozer.spec
@@ -147,11 +130,10 @@ jobs:
 
 
       # ==========================================
-      # PART 09 — Clean Previous Build
+      # PART 09 — Clean Build
       # ==========================================
       - name: Clean Build
         run: |
-
           echo "=============================="
           echo "CLEAN BUILD"
           echo "=============================="
@@ -163,70 +145,36 @@ jobs:
 
 
       # ==========================================
-      # PART 10 — Prepare Android SDK Licenses
-      # ==========================================
-      - name: Prepare Android SDK Licenses
-        run: |
-
-          echo "=============================="
-          echo "ANDROID SDK LICENSE"
-          echo "=============================="
-
-          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
-
-          mkdir -p "$SDK_ROOT/licenses"
-
-          cat > "$SDK_ROOT/licenses/android-sdk-license" <<'EOF'
-24333f8a63b6825ea9c5514f83c2829b004d1fee
-d56f5187479451eabf01fb78af6dfcb131a6481e
-EOF
-
-          echo "Android SDK license file prepared."
-
-          echo
-          echo "SDK ROOT:"
-          echo "$SDK_ROOT"
-
-
-      # ==========================================
-      # PART 11 — Build APK
+      # PART 10 — Build APK
       # ==========================================
       - name: Build APK
         env:
           BUILDOZER_WARN_ON_ROOT: "1"
+          PIP_NO_INPUT: "1"
 
         run: |
-
           echo "=============================="
-          echo "STARTING ANDROID BUILD"
+          echo "STARTING V16 ANTIVIRUS BUILD"
           echo "=============================="
 
           buildozer -v android debug
 
 
       # ==========================================
-      # PART 12 — Check APK
+      # PART 11 — Check APK
       # ==========================================
       - name: Check Generated APK
         if: always()
-
         run: |
-
-          echo
           echo "=============================="
           echo "GENERATED APK"
           echo "=============================="
 
-          if compgen -G "bin/*.apk" > /dev/null
-          then
-
-            echo "APK FOUND"
-
+          if compgen -G "bin/*.apk" > /dev/null; then
+            echo "APK FOUND:"
             ls -lh bin/*.apk
-
           else
-
-            echo "ERROR: APK was not generated."
+            echo "ERROR: APK WAS NOT GENERATED."
 
             echo
             echo "Searching for APK files..."
@@ -236,27 +184,16 @@ EOF
               \( -name "*.apk" -o -name "*.aab" \) \
               -print || true
 
-            echo
-            echo "Searching build directories..."
-
-            find .buildozer \
-              -type f \
-              \( -name "*.apk" -o -name "*.aab" \) \
-              -print 2>/dev/null || true
-
             exit 1
-
           fi
 
 
       # ==========================================
-      # PART 13 — Upload APK
+      # PART 12 — Upload APK
       # ==========================================
       - name: Upload APK
         if: success()
-
         uses: actions/upload-artifact@v4
-
         with:
           name: V16-Antivirus-APK
           path: bin/*.apk
