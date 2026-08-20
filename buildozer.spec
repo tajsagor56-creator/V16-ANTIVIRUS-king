@@ -25,12 +25,6 @@ android.private_storage = True
 android.allow_backup = False
 android.uses_cleartext_connection = False
 
-android.accept_sdk_license = True
-
-android.ndk = 28c
-
-android.debug_artifact = apk
-
 
 [buildozer]
 
