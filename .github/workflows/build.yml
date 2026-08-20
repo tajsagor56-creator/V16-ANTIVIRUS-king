@@ -102,7 +102,7 @@ jobs:
 
           echo ""
           echo "Checking main Python file..."
-          test -f V16Antivirus.py
+          test -f main.py
 
       # ==========================================
       # 7. Clean Buildozer cache
