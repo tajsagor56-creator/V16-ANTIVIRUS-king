@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@v4
 
       # ==========================================
-      # 2. Python
+      # 2. Python 3.11
       # ==========================================
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -39,7 +39,7 @@ jobs:
       # ==========================================
       # 4. Linux dependencies
       # ==========================================
-      - name: Install dependencies
+      - name: Install Linux dependencies
         run: |
           sudo apt-get update
 
@@ -70,8 +70,7 @@ jobs:
           SDK="/usr/local/lib/android/sdk"
 
           if [ ! -d "$SDK" ]; then
-            echo "Android SDK not found:"
-            echo "$SDK"
+            echo "ERROR: Android SDK not found."
             exit 1
           fi
 
@@ -80,6 +79,9 @@ jobs:
 
           echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
           echo "$SDK/platform-tools" >> "$GITHUB_PATH"
+
+          echo "Android SDK:"
+          echo "$SDK"
 
       # ==========================================
       # 6. Locate sdkmanager
@@ -98,15 +100,15 @@ jobs:
             exit 1
           fi
 
-          chmod +x "$SDKMANAGER"
-
           echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
 
-          echo "sdkmanager:"
+          echo "sdkmanager found:"
+          echo "$SDKMANAGER"
+
           "$SDKMANAGER" --version
 
       # ==========================================
-      # 7. Accept licenses
+      # 7. Accept Android licenses
       # ==========================================
       - name: Accept Android SDK licenses
         shell: bash
@@ -115,9 +117,9 @@ jobs:
           yes | "$SDKMANAGER" --licenses || true
 
       # ==========================================
-      # 8. Install EXACT Android 35 components
+      # 8. Install API 35 + Build Tools 35
       # ==========================================
-      - name: Install Android SDK components
+      - name: Install Android SDK 35
         shell: bash
         run: |
 
@@ -127,29 +129,40 @@ jobs:
             "build-tools;35.0.0"
 
       # ==========================================
-      # 9. Verify Build Tools
+      # 9. Verify SDK
       # ==========================================
-      - name: Verify Android Build Tools
+      - name: Verify Android SDK
         shell: bash
         run: |
 
-          echo "Installed Build Tools:"
+          echo "===================================="
+          echo "ANDROID SDK"
+          echo "===================================="
+
+          echo "SDK:"
+          echo "$ANDROID_HOME"
+
+          echo ""
+          echo "Platforms:"
+          ls -la "$ANDROID_HOME/platforms"
+
+          echo ""
+          echo "Build Tools:"
           ls -la "$ANDROID_HOME/build-tools"
 
           echo ""
           echo "AIDL:"
 
+          test -f \
+            "$ANDROID_HOME/build-tools/35.0.0/aidl"
+
           test -x \
             "$ANDROID_HOME/build-tools/35.0.0/aidl"
 
-          "$ANDROID_HOME/build-tools/35.0.0/aidl" \
-            --version || true
-
-          echo ""
-          echo "AIDL successfully found."
+          echo "AIDL found successfully."
 
       # ==========================================
-      # 10. Install Buildozer
+      # 10. Python build tools
       # ==========================================
       - name: Install Buildozer
         shell: bash
@@ -170,10 +183,12 @@ jobs:
         shell: bash
         run: |
 
-          echo "================================"
-          echo "PROJECT FILES"
-          echo "================================"
+          echo "===================================="
+          echo "PROJECT"
+          echo "===================================="
 
+          echo ""
+          echo "Files:"
           find . -maxdepth 3 -type f | sort
 
           echo ""
@@ -189,15 +204,15 @@ jobs:
           buildozer --version
 
           echo ""
-          echo "Checking main.py:"
+          echo "main.py:"
           test -f main.py
 
           echo ""
-          echo "Checking buildozer.spec:"
+          echo "buildozer.spec:"
           test -f buildozer.spec
 
       # ==========================================
-      # 12. Clean Buildozer
+      # 12. Clean previous Buildozer data
       # ==========================================
       - name: Clean Buildozer
         shell: bash
@@ -224,7 +239,9 @@ jobs:
         shell: bash
         run: |
 
-          echo "APK files:"
+          echo "===================================="
+          echo "GENERATED APK"
+          echo "===================================="
 
           find bin \
             -type f \
@@ -241,6 +258,7 @@ jobs:
             exit 1
           fi
 
+          echo ""
           echo "APK found:"
           ls -lh "$APK"
 
@@ -261,8 +279,8 @@ jobs:
           cp "$APK" \
             release/V16-Antivirus-Pro.apk
 
-          ls -lh \
-            release/V16-Antivirus-Pro.apk
+          echo "Final APK:"
+          ls -lh release/V16-Antivirus-Pro.apk
 
       # ==========================================
       # 16. Upload APK
