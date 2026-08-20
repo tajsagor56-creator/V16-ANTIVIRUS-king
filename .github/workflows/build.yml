@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@v4
 
       # ==========================================
-      # 2. Python 3.11
+      # 2. Python
       # ==========================================
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -39,7 +39,7 @@ jobs:
       # ==========================================
       # 4. Linux dependencies
       # ==========================================
-      - name: Install Linux dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
 
@@ -61,135 +61,28 @@ jobs:
             libssl-dev
 
       # ==========================================
-      # 5. Android SDK
-      # ==========================================
-      - name: Configure Android SDK
-        shell: bash
-        run: |
-
-          SDK="/usr/local/lib/android/sdk"
-
-          if [ ! -d "$SDK" ]; then
-            echo "ERROR: Android SDK not found."
-            exit 1
-          fi
-
-          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
-
-          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
-
-          echo "Android SDK:"
-          echo "$SDK"
-
-      # ==========================================
-      # 6. Locate sdkmanager
-      # ==========================================
-      - name: Locate sdkmanager
-        shell: bash
-        run: |
-
-          SDKMANAGER="$(find "$ANDROID_HOME" \
-            -type f \
-            -name sdkmanager \
-            -print -quit)"
-
-          if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager not found."
-            exit 1
-          fi
-
-          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
-
-          echo "sdkmanager found:"
-          echo "$SDKMANAGER"
-
-          "$SDKMANAGER" --version
-
-      # ==========================================
-      # 7. Accept Android licenses
-      # ==========================================
-      - name: Accept Android SDK licenses
-        shell: bash
-        run: |
-
-          yes | "$SDKMANAGER" --licenses || true
-
-      # ==========================================
-      # 8. Install API 35 + Build Tools 35
-      # ==========================================
-      - name: Install Android SDK 35
-        shell: bash
-        run: |
-
-          "$SDKMANAGER" \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
-      # ==========================================
-      # 9. Verify SDK
-      # ==========================================
-      - name: Verify Android SDK
-        shell: bash
-        run: |
-
-          echo "===================================="
-          echo "ANDROID SDK"
-          echo "===================================="
-
-          echo "SDK:"
-          echo "$ANDROID_HOME"
-
-          echo ""
-          echo "Platforms:"
-          ls -la "$ANDROID_HOME/platforms"
-
-          echo ""
-          echo "Build Tools:"
-          ls -la "$ANDROID_HOME/build-tools"
-
-          echo ""
-          echo "AIDL:"
-
-          test -f \
-            "$ANDROID_HOME/build-tools/35.0.0/aidl"
-
-          test -x \
-            "$ANDROID_HOME/build-tools/35.0.0/aidl"
-
-          echo "AIDL found successfully."
-
-      # ==========================================
-      # 10. Python build tools
+      # 5. Install Buildozer
       # ==========================================
       - name: Install Buildozer
-        shell: bash
         run: |
-
           python -m pip install --upgrade pip
-
-          python -m pip install \
-            setuptools \
-            wheel \
-            cython \
-            buildozer==1.6.0
+          python -m pip install --upgrade setuptools wheel
+          python -m pip install buildozer cython
 
       # ==========================================
-      # 11. Verify project
+      # 6. Verify project
       # ==========================================
       - name: Verify project
-        shell: bash
         run: |
-
-          echo "===================================="
+          echo "=============================="
           echo "PROJECT"
-          echo "===================================="
+          echo "=============================="
+
+          pwd
 
           echo ""
           echo "Files:"
-          find . -maxdepth 3 -type f | sort
+          find . -maxdepth 2 -type f | sort
 
           echo ""
           echo "Python:"
@@ -204,86 +97,68 @@ jobs:
           buildozer --version
 
           echo ""
-          echo "main.py:"
-          test -f main.py
-
-          echo ""
-          echo "buildozer.spec:"
+          echo "Checking buildozer.spec..."
           test -f buildozer.spec
 
+          echo ""
+          echo "Checking main Python file..."
+          test -f V16Antivirus.py
+
       # ==========================================
-      # 12. Clean previous Buildozer data
+      # 7. Clean Buildozer cache
       # ==========================================
       - name: Clean Buildozer
-        shell: bash
         run: |
-
           rm -rf .buildozer
           rm -rf bin
 
       # ==========================================
-      # 13. Build APK
+      # 8. Build APK
       # ==========================================
       - name: Build APK
         shell: bash
         env:
-          ACCEPT_EULA: Y
+          P4A_RELEASE_KEYSTORE: ""
         run: |
-
-          buildozer -v android debug
+          yes | buildozer -v android debug
 
       # ==========================================
-      # 14. Find APK
+      # 9. Find APK
       # ==========================================
       - name: Find APK
-        shell: bash
         run: |
+          echo "=============================="
+          echo "SEARCHING FOR APK"
+          echo "=============================="
 
-          echo "===================================="
-          echo "GENERATED APK"
-          echo "===================================="
+          find . -type f -name "*.apk" -print
 
-          find bin \
-            -type f \
-            -name "*.apk" \
-            -print
-
-          APK="$(find bin \
-            -type f \
-            -name "*.apk" \
-            -print -quit)"
+          APK=$(find bin -type f -name "*.apk" | head -n 1)
 
           if [ -z "$APK" ]; then
             echo "ERROR: APK was not generated."
             exit 1
           fi
 
-          echo ""
-          echo "APK found:"
+          echo "APK:"
           ls -lh "$APK"
 
       # ==========================================
-      # 15. Prepare APK
+      # 10. Prepare APK
       # ==========================================
       - name: Prepare APK
-        shell: bash
         run: |
-
           mkdir -p release
 
-          APK="$(find bin \
-            -type f \
-            -name "*.apk" \
-            -print -quit)"
+          APK=$(find bin -type f -name "*.apk" | head -n 1)
 
           cp "$APK" \
-            release/V16-Antivirus-Pro.apk
+            "release/V16-Antivirus-Pro.apk"
 
-          echo "Final APK:"
           ls -lh release/V16-Antivirus-Pro.apk
 
       # ==========================================
-      # 16. Upload APK
+      # 11. Upload APK
       # ==========================================
       - name: Upload APK
         uses: actions/upload-artifact@v4
