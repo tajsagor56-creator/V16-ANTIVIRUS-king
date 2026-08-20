@@ -8,7 +8,6 @@ on:
 
 jobs:
   build:
-    name: Build V16 Antivirus Pro
     runs-on: ubuntu-22.04
 
     steps:
@@ -21,124 +20,147 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Setup Java
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Install Linux dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
-
           sudo apt-get install -y \
             git \
             zip \
             unzip \
-            wget \
-            curl \
             autoconf \
             automake \
             libtool \
             pkg-config \
             zlib1g-dev \
-            libncurses5-dev \
-            libncursesw5-dev \
-            cmake \
-            libffi-dev \
-            libssl-dev
+            libffi-dev
 
-      - name: Install Buildozer
+      - name: Install Python build tools
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --upgrade setuptools wheel
-          python -m pip install buildozer cython
+          python -m pip install "buildozer==1.6.0"
+          python -m pip install "Cython<3"
 
-      - name: Verify project
+      - name: Check project
         run: |
           echo "=============================="
           echo "PROJECT FILES"
           echo "=============================="
+          find . -maxdepth 3 -type f \
+            ! -path './.git/*' \
+            -print
 
-          find . -maxdepth 3 -type f | sort
-
-          echo ""
-          echo "Python:"
+          echo
+          echo "=============================="
+          echo "PYTHON"
+          echo "=============================="
           python --version
 
-          echo ""
-          echo "Java:"
+          echo
+          echo "=============================="
+          echo "JAVA"
+          echo "=============================="
           java -version
 
-          echo ""
-          echo "Buildozer:"
+          echo
+          echo "=============================="
+          echo "BUILDOZER"
+          echo "=============================="
           buildozer --version
 
-          echo ""
-          echo "Checking buildozer.spec..."
-          test -f buildozer.spec
-
-          echo ""
-          echo "Checking main.py..."
+          echo
+          echo "=============================="
+          echo "CHECK MAIN.PY"
+          echo "=============================="
           test -f main.py
+          python -m py_compile main.py
 
-      - name: Clean previous build
+          echo "main.py syntax OK"
+
+      - name: Clean Buildozer
         run: |
           rm -rf .buildozer
           rm -rf bin
+          mkdir -p bin
 
       - name: Build APK
+        env:
+          PIP_NO_INPUT: "1"
+          PYTHONUNBUFFERED: "1"
         run: |
-          buildozer -v android debug 2>&1 | tee build.log
+          echo "=============================="
+          echo "STARTING BUILDOZER"
+          echo "=============================="
 
-      - name: Show build error
-        if: failure()
-        run: |
-          echo "========================================"
-          echo "LAST 100 LINES OF BUILD LOG"
-          echo "========================================"
+          buildozer -v android debug
 
-          if [ -f build.log ]; then
-            tail -n 100 build.log
-          fi
-
-      - name: Upload build log
+      - name: Inspect Build Output
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: V16-build-log
-          path: build.log
-          if-no-files-found: ignore
-          retention-days: 7
+        run: |
+          echo
+          echo "=============================="
+          echo "BUILD DIRECTORY"
+          echo "=============================="
 
-      - name: Find APK
+          find . -maxdepth 4 -type f \
+            \( -name "*.apk" -o -name "*.aab" \) \
+            -print || true
+
+          echo
+          echo "=============================="
+          echo "BIN DIRECTORY"
+          echo "=============================="
+
+          ls -lah bin || true
+
+          echo
+          echo "=============================="
+          echo "BUILDOZER LOG FILES"
+          echo "=============================="
+
+          find .buildozer -type f \
+            \( -name "*.log" -o -name "*.txt" \) \
+            -print 2>/dev/null | head -50 || true
+
+      - name: Verify APK
         if: success()
         run: |
           echo "=============================="
           echo "GENERATED APK"
           echo "=============================="
 
-          find bin -type f -name "*.apk" -print
-
-          APK="$(find bin -type f -name "*.apk" | head -n 1)"
+          APK=$(find bin -type f -name "*.apk" | head -1)
 
           if [ -z "$APK" ]; then
             echo "ERROR: APK was not generated."
             exit 1
           fi
 
-          mkdir -p release
+          echo "APK FOUND:"
+          echo "$APK"
 
-          cp "$APK" \
-            release/V16-Antivirus-Pro.apk
-
-          ls -lh release/V16-Antivirus-Pro.apk
+          ls -lh "$APK"
 
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: V16-Antivirus-Pro
-          path: release/V16-Antivirus-Pro.apk
+          name: V16-Antivirus-Pro-APK
+          path: bin/*.apk
           if-no-files-found: error
-          retention-days: 30
+
+      - name: Upload Build Files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: V16-Build-Diagnostics
+          path: |
+            buildozer.spec
+            main.py
+            .buildozer/
+          if-no-files-found: ignore
