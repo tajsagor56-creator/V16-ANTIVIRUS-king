@@ -4,23 +4,25 @@ on:
   push:
     branches:
       - main
+
   workflow_dispatch:
 
 jobs:
   build:
+
     runs-on: ubuntu-22.04
 
     steps:
 
       # ==========================================
-      # 1. Checkout
+      # PART 01 — Checkout Repository
       # ==========================================
       - name: Checkout Repository
         uses: actions/checkout@v4
 
 
       # ==========================================
-      # 2. Python
+      # PART 02 — Setup Python 3.11
       # ==========================================
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -29,7 +31,7 @@ jobs:
 
 
       # ==========================================
-      # 3. Java 17
+      # PART 03 — Setup Java 17
       # ==========================================
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -39,10 +41,11 @@ jobs:
 
 
       # ==========================================
-      # 4. System packages
+      # PART 04 — Install System Packages
       # ==========================================
       - name: Install System Packages
         run: |
+
           sudo apt-get update
 
           sudo apt-get install -y \
@@ -56,15 +59,18 @@ jobs:
             zlib1g-dev \
             libncurses5-dev \
             libncursesw5-dev \
-            cmake
+            cmake \
+            libffi-dev
 
 
       # ==========================================
-      # 5. Python build tools
+      # PART 05 — Install Python Build Packages
       # ==========================================
       - name: Install Buildozer
         run: |
-          python -m pip install --upgrade pip setuptools wheel
+
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade setuptools wheel
 
           python -m pip install \
             buildozer==1.6.0 \
@@ -73,30 +79,51 @@ jobs:
 
 
       # ==========================================
-      # 6. Validate project
+      # PART 06 — Check Environment
       # ==========================================
-      - name: Validate Project
+      - name: Check Environment
         run: |
+
           echo "=============================="
-          echo "PROJECT FILES"
+          echo "PROJECT"
           echo "=============================="
 
+          pwd
           ls -la
 
           echo
-          echo "Python:"
+          echo "=============================="
+          echo "PYTHON"
+          echo "=============================="
+
           python --version
 
           echo
-          echo "Java:"
+          echo "=============================="
+          echo "JAVA"
+          echo "=============================="
+
           java -version
 
           echo
-          echo "Buildozer:"
+          echo "=============================="
+          echo "BUILDOZER"
+          echo "=============================="
+
           buildozer --version
 
-          echo
-          echo "Checking main.py..."
+
+      # ==========================================
+      # PART 07 — Validate main.py
+      # ==========================================
+      - name: Validate Python
+        run: |
+
+          echo "=============================="
+          echo "CHECKING main.py"
+          echo "=============================="
+
+          test -f main.py
 
           python -m py_compile main.py
 
@@ -105,10 +132,30 @@ jobs:
 
 
       # ==========================================
-      # 7. Clean Build
+      # PART 08 — Check buildozer.spec
+      # ==========================================
+      - name: Check Buildozer Spec
+        run: |
+
+          echo "=============================="
+          echo "BUILDOZER SPEC"
+          echo "=============================="
+
+          test -f buildozer.spec
+
+          cat buildozer.spec
+
+
+      # ==========================================
+      # PART 09 — Clean Previous Build
       # ==========================================
       - name: Clean Build
         run: |
+
+          echo "=============================="
+          echo "CLEAN BUILD"
+          echo "=============================="
+
           rm -rf .buildozer
           rm -rf bin
 
@@ -116,33 +163,65 @@ jobs:
 
 
       # ==========================================
-      # 8. Build APK
+      # PART 10 — Prepare Android SDK Licenses
+      # ==========================================
+      - name: Prepare Android SDK Licenses
+        run: |
+
+          echo "=============================="
+          echo "ANDROID SDK LICENSE"
+          echo "=============================="
+
+          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
+
+          mkdir -p "$SDK_ROOT/licenses"
+
+          cat > "$SDK_ROOT/licenses/android-sdk-license" <<'EOF'
+24333f8a63b6825ea9c5514f83c2829b004d1fee
+d56f5187479451eabf01fb78af6dfcb131a6481e
+EOF
+
+          echo "Android SDK license file prepared."
+
+          echo
+          echo "SDK ROOT:"
+          echo "$SDK_ROOT"
+
+
+      # ==========================================
+      # PART 11 — Build APK
       # ==========================================
       - name: Build APK
         env:
           BUILDOZER_WARN_ON_ROOT: "1"
+
         run: |
+
           echo "=============================="
-          echo "STARTING BUILDOZER"
+          echo "STARTING ANDROID BUILD"
           echo "=============================="
 
           buildozer -v android debug
 
 
       # ==========================================
-      # 9. Check APK
+      # PART 12 — Check APK
       # ==========================================
-      - name: Check APK
+      - name: Check Generated APK
         if: always()
+
         run: |
 
+          echo
           echo "=============================="
           echo "GENERATED APK"
           echo "=============================="
 
-          if compgen -G "bin/*.apk" > /dev/null; then
+          if compgen -G "bin/*.apk" > /dev/null
+          then
 
-            echo "APK FOUND:"
+            echo "APK FOUND"
+
             ls -lh bin/*.apk
 
           else
@@ -150,12 +229,20 @@ jobs:
             echo "ERROR: APK was not generated."
 
             echo
-            echo "Searching entire project..."
+            echo "Searching for APK files..."
 
             find . \
               -type f \
               \( -name "*.apk" -o -name "*.aab" \) \
               -print || true
+
+            echo
+            echo "Searching build directories..."
+
+            find .buildozer \
+              -type f \
+              \( -name "*.apk" -o -name "*.aab" \) \
+              -print 2>/dev/null || true
 
             exit 1
 
@@ -163,11 +250,13 @@ jobs:
 
 
       # ==========================================
-      # 10. Upload APK
+      # PART 13 — Upload APK
       # ==========================================
       - name: Upload APK
         if: success()
+
         uses: actions/upload-artifact@v4
+
         with:
           name: V16-Antivirus-APK
           path: bin/*.apk
