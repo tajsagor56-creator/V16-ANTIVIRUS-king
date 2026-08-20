@@ -11,38 +11,35 @@ jobs:
     name: Build V16 Antivirus APK
     runs-on: ubuntu-22.04
 
-    env:
-      BUILDOZER_WARN_ON_ROOT: "1"
-
     steps:
 
-      # ============================================
+      # ==========================================
       # 1. Checkout
-      # ============================================
+      # ==========================================
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ============================================
-      # 2. Python 3.11
-      # ============================================
+      # ==========================================
+      # 2. Python
+      # ==========================================
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # ============================================
+      # ==========================================
       # 3. Java 17
-      # ============================================
+      # ==========================================
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      # ============================================
+      # ==========================================
       # 4. Linux dependencies
-      # ============================================
-      - name: Install system dependencies
+      # ==========================================
+      - name: Install dependencies
         run: |
           sudo apt-get update
 
@@ -63,128 +60,213 @@ jobs:
             libffi-dev \
             libssl-dev
 
-      # ============================================
-      # 5. Install Python build tools
-      # ============================================
+      # ==========================================
+      # 5. Android SDK
+      # ==========================================
+      - name: Configure Android SDK
+        shell: bash
+        run: |
+
+          SDK="/usr/local/lib/android/sdk"
+
+          if [ ! -d "$SDK" ]; then
+            echo "Android SDK not found:"
+            echo "$SDK"
+            exit 1
+          fi
+
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+
+          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
+
+      # ==========================================
+      # 6. Locate sdkmanager
+      # ==========================================
+      - name: Locate sdkmanager
+        shell: bash
+        run: |
+
+          SDKMANAGER="$(find "$ANDROID_HOME" \
+            -type f \
+            -name sdkmanager \
+            -print -quit)"
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager not found."
+            exit 1
+          fi
+
+          chmod +x "$SDKMANAGER"
+
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+
+          echo "sdkmanager:"
+          "$SDKMANAGER" --version
+
+      # ==========================================
+      # 7. Accept licenses
+      # ==========================================
+      - name: Accept Android SDK licenses
+        shell: bash
+        run: |
+
+          yes | "$SDKMANAGER" --licenses || true
+
+      # ==========================================
+      # 8. Install EXACT Android 35 components
+      # ==========================================
+      - name: Install Android SDK components
+        shell: bash
+        run: |
+
+          "$SDKMANAGER" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      # ==========================================
+      # 9. Verify Build Tools
+      # ==========================================
+      - name: Verify Android Build Tools
+        shell: bash
+        run: |
+
+          echo "Installed Build Tools:"
+          ls -la "$ANDROID_HOME/build-tools"
+
+          echo ""
+          echo "AIDL:"
+
+          test -x \
+            "$ANDROID_HOME/build-tools/35.0.0/aidl"
+
+          "$ANDROID_HOME/build-tools/35.0.0/aidl" \
+            --version || true
+
+          echo ""
+          echo "AIDL successfully found."
+
+      # ==========================================
+      # 10. Install Buildozer
+      # ==========================================
       - name: Install Buildozer
+        shell: bash
         run: |
+
           python -m pip install --upgrade pip
-          python -m pip install --upgrade setuptools wheel
-          python -m pip install "buildozer==1.6.0"
-          python -m pip install "cython<3"
 
-      # ============================================
-      # 6. Verify environment
-      # ============================================
-      - name: Verify environment
+          python -m pip install \
+            setuptools \
+            wheel \
+            cython \
+            buildozer==1.6.0
+
+      # ==========================================
+      # 11. Verify project
+      # ==========================================
+      - name: Verify project
+        shell: bash
         run: |
-          echo "================================"
-          echo "PYTHON"
-          echo "================================"
-          python --version
 
-          echo ""
-          echo "================================"
-          echo "JAVA"
-          echo "================================"
-          java -version
-
-          echo ""
-          echo "================================"
-          echo "BUILDOZER"
-          echo "================================"
-          buildozer --version
-
-          echo ""
           echo "================================"
           echo "PROJECT FILES"
           echo "================================"
+
           find . -maxdepth 3 -type f | sort
 
           echo ""
-          echo "================================"
-          echo "CHECK MAIN FILE"
-          echo "================================"
+          echo "Python:"
+          python --version
+
+          echo ""
+          echo "Java:"
+          java -version
+
+          echo ""
+          echo "Buildozer:"
+          buildozer --version
+
+          echo ""
+          echo "Checking main.py:"
           test -f main.py
 
           echo ""
-          echo "================================"
-          echo "CHECK BUILDOZER SPEC"
-          echo "================================"
+          echo "Checking buildozer.spec:"
           test -f buildozer.spec
 
-          echo ""
-          echo "Project verification successful."
-
-      # ============================================
-      # 7. Initialize Buildozer
-      # ============================================
-      - name: Initialize Buildozer
-        run: |
-          buildozer android clean || true
-
-      # ============================================
-      # 8. Build APK
-      # ============================================
-      - name: Build V16 APK
+      # ==========================================
+      # 12. Clean Buildozer
+      # ==========================================
+      - name: Clean Buildozer
         shell: bash
         run: |
-          set -o pipefail
 
-          buildozer -v android debug 2>&1 | tee build.log
+          rm -rf .buildozer
+          rm -rf bin
 
-      # ============================================
-      # 9. Show build log if failed
-      # ============================================
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: V16-build-log
-          path: build.log
-          if-no-files-found: ignore
-          retention-days: 7
-
-      # ============================================
-      # 10. Find APK
-      # ============================================
-      - name: Find APK
+      # ==========================================
+      # 13. Build APK
+      # ==========================================
+      - name: Build APK
+        shell: bash
+        env:
+          ACCEPT_EULA: Y
         run: |
-          echo "================================"
-          echo "SEARCHING FOR APK"
-          echo "================================"
 
-          find . -type f -name "*.apk" -print
+          buildozer -v android debug
 
-          APK="$(find bin -type f -name "*.apk" 2>/dev/null | head -n 1)"
+      # ==========================================
+      # 14. Find APK
+      # ==========================================
+      - name: Find APK
+        shell: bash
+        run: |
+
+          echo "APK files:"
+
+          find bin \
+            -type f \
+            -name "*.apk" \
+            -print
+
+          APK="$(find bin \
+            -type f \
+            -name "*.apk" \
+            -print -quit)"
 
           if [ -z "$APK" ]; then
             echo "ERROR: APK was not generated."
             exit 1
           fi
 
-          echo "APK FOUND:"
+          echo "APK found:"
           ls -lh "$APK"
 
-      # ============================================
-      # 11. Prepare release
-      # ============================================
+      # ==========================================
+      # 15. Prepare APK
+      # ==========================================
       - name: Prepare APK
+        shell: bash
         run: |
+
           mkdir -p release
 
-          APK="$(find bin -type f -name "*.apk" | head -n 1)"
+          APK="$(find bin \
+            -type f \
+            -name "*.apk" \
+            -print -quit)"
 
           cp "$APK" \
-            "release/V16-Antivirus-Pro.apk"
+            release/V16-Antivirus-Pro.apk
 
-          echo "Final APK:"
           ls -lh \
-            "release/V16-Antivirus-Pro.apk"
+            release/V16-Antivirus-Pro.apk
 
-      # ============================================
-      # 12. Upload APK
-      # ============================================
+      # ==========================================
+      # 16. Upload APK
+      # ==========================================
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
