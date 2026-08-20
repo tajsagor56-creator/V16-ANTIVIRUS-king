@@ -1,0 +1,163 @@
+name: V16 Antivirus APK Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build V16 Antivirus APK
+    runs-on: ubuntu-22.04
+
+    steps:
+
+      # ==========================================
+      # 1. Checkout
+      # ==========================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ==========================================
+      # 2. Python
+      # ==========================================
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # ==========================================
+      # 3. Java 17
+      # ==========================================
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # ==========================================
+      # 4. Linux dependencies
+      # ==========================================
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+
+          sudo apt-get install -y \
+            git \
+            zip \
+            unzip \
+            wget \
+            curl \
+            autoconf \
+            automake \
+            libtool \
+            pkg-config \
+            zlib1g-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
+            cmake \
+            libffi-dev \
+            libssl-dev
+
+      # ==========================================
+      # 5. Install Buildozer
+      # ==========================================
+      - name: Install Buildozer
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade setuptools wheel
+          python -m pip install buildozer cython
+
+      # ==========================================
+      # 6. Verify project
+      # ==========================================
+      - name: Verify project
+        run: |
+          echo "=============================="
+          echo "PROJECT"
+          echo "=============================="
+
+          pwd
+
+          echo ""
+          echo "Files:"
+          find . -maxdepth 3 -type f | sort
+
+          echo ""
+          echo "Python:"
+          python --version
+
+          echo ""
+          echo "Java:"
+          java -version
+
+          echo ""
+          echo "Buildozer:"
+          buildozer --version
+
+          echo ""
+          echo "Checking main.py:"
+          test -f main.py
+
+          echo ""
+          echo "Checking buildozer.spec:"
+          test -f buildozer.spec
+
+          echo ""
+          echo "Project verification OK."
+
+      # ==========================================
+      # 7. Build APK
+      # ==========================================
+      - name: Build V16 APK
+        run: |
+          yes | buildozer -v android debug
+
+      # ==========================================
+      # 8. Find APK
+      # ==========================================
+      - name: Find APK
+        run: |
+          echo "=============================="
+          echo "GENERATED APK"
+          echo "=============================="
+
+          find bin -type f -name "*.apk" -print
+
+          APK="$(find bin -type f -name "*.apk" | head -n 1)"
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: APK was not generated."
+            exit 1
+          fi
+
+          echo "APK:"
+          ls -lh "$APK"
+
+      # ==========================================
+      # 9. Prepare APK
+      # ==========================================
+      - name: Prepare APK
+        run: |
+          mkdir -p release
+
+          APK="$(find bin -type f -name "*.apk" | head -n 1)"
+
+          cp "$APK" \
+            "release/V16-Antivirus-Pro.apk"
+
+          ls -lh \
+            "release/V16-Antivirus-Pro.apk"
+
+      # ==========================================
+      # 10. Upload APK
+      # ==========================================
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: V16-Antivirus-Pro
+          path: release/V16-Antivirus-Pro.apk
+          if-no-files-found: error
+          retention-days: 30
