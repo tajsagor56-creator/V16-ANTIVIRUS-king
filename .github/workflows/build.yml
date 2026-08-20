@@ -11,34 +11,37 @@ jobs:
     name: Build V16 Antivirus APK
     runs-on: ubuntu-22.04
 
+    env:
+      BUILDOZER_WARN_ON_ROOT: "1"
+
     steps:
 
-      # ==========================================
+      # ============================================
       # 1. Checkout
-      # ==========================================
+      # ============================================
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ==========================================
-      # 2. Python
-      # ==========================================
+      # ============================================
+      # 2. Python 3.11
+      # ============================================
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # ==========================================
+      # ============================================
       # 3. Java 17
-      # ==========================================
+      # ============================================
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      # ==========================================
+      # ============================================
       # 4. Linux dependencies
-      # ==========================================
+      # ============================================
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -60,84 +63,112 @@ jobs:
             libffi-dev \
             libssl-dev
 
-      # ==========================================
-      # 5. Install Buildozer
-      # ==========================================
+      # ============================================
+      # 5. Install Python build tools
+      # ============================================
       - name: Install Buildozer
         run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade setuptools wheel
-          python -m pip install buildozer cython
+          python -m pip install "buildozer==1.6.0"
+          python -m pip install "cython<3"
 
-      # ==========================================
-      # 6. Verify project
-      # ==========================================
-      - name: Verify project
+      # ============================================
+      # 6. Verify environment
+      # ============================================
+      - name: Verify environment
         run: |
-          echo "=============================="
-          echo "PROJECT"
-          echo "=============================="
-
-          pwd
-
-          echo ""
-          echo "Files:"
-          find . -maxdepth 3 -type f | sort
-
-          echo ""
-          echo "Python:"
+          echo "================================"
+          echo "PYTHON"
+          echo "================================"
           python --version
 
           echo ""
-          echo "Java:"
+          echo "================================"
+          echo "JAVA"
+          echo "================================"
           java -version
 
           echo ""
-          echo "Buildozer:"
+          echo "================================"
+          echo "BUILDOZER"
+          echo "================================"
           buildozer --version
 
           echo ""
-          echo "Checking main.py:"
+          echo "================================"
+          echo "PROJECT FILES"
+          echo "================================"
+          find . -maxdepth 3 -type f | sort
+
+          echo ""
+          echo "================================"
+          echo "CHECK MAIN FILE"
+          echo "================================"
           test -f main.py
 
           echo ""
-          echo "Checking buildozer.spec:"
+          echo "================================"
+          echo "CHECK BUILDOZER SPEC"
+          echo "================================"
           test -f buildozer.spec
 
           echo ""
-          echo "Project verification OK."
+          echo "Project verification successful."
 
-      # ==========================================
-      # 7. Build APK
-      # ==========================================
-      - name: Build V16 APK
+      # ============================================
+      # 7. Initialize Buildozer
+      # ============================================
+      - name: Initialize Buildozer
         run: |
-          yes | buildozer -v android debug
+          buildozer android clean || true
 
-      # ==========================================
-      # 8. Find APK
-      # ==========================================
+      # ============================================
+      # 8. Build APK
+      # ============================================
+      - name: Build V16 APK
+        shell: bash
+        run: |
+          set -o pipefail
+
+          buildozer -v android debug 2>&1 | tee build.log
+
+      # ============================================
+      # 9. Show build log if failed
+      # ============================================
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: V16-build-log
+          path: build.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # ============================================
+      # 10. Find APK
+      # ============================================
       - name: Find APK
         run: |
-          echo "=============================="
-          echo "GENERATED APK"
-          echo "=============================="
+          echo "================================"
+          echo "SEARCHING FOR APK"
+          echo "================================"
 
-          find bin -type f -name "*.apk" -print
+          find . -type f -name "*.apk" -print
 
-          APK="$(find bin -type f -name "*.apk" | head -n 1)"
+          APK="$(find bin -type f -name "*.apk" 2>/dev/null | head -n 1)"
 
           if [ -z "$APK" ]; then
             echo "ERROR: APK was not generated."
             exit 1
           fi
 
-          echo "APK:"
+          echo "APK FOUND:"
           ls -lh "$APK"
 
-      # ==========================================
-      # 9. Prepare APK
-      # ==========================================
+      # ============================================
+      # 11. Prepare release
+      # ============================================
       - name: Prepare APK
         run: |
           mkdir -p release
@@ -147,12 +178,13 @@ jobs:
           cp "$APK" \
             "release/V16-Antivirus-Pro.apk"
 
+          echo "Final APK:"
           ls -lh \
             "release/V16-Antivirus-Pro.apk"
 
-      # ==========================================
-      # 10. Upload APK
-      # ==========================================
+      # ============================================
+      # 12. Upload APK
+      # ============================================
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
