@@ -124,7 +124,7 @@ jobs:
 
           echo "Build directory প্রস্তুত হয়েছে"
 
-            # ==========================================
+                  # ==========================================
       # ৯. Android SDK প্রস্তুত করা
       # ==========================================
       - name: Android SDK প্রস্তুত করা
@@ -135,14 +135,6 @@ jobs:
 
           SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
 
-          echo "SDK_ROOT:"
-          echo "$SDK_ROOT"
-
-          mkdir -p "$SDK_ROOT"
-
-          echo
-          echo "System Android SDK খোঁজা হচ্ছে..."
-
           if [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME" ]; then
             SYSTEM_SDK="$ANDROID_HOME"
           elif [ -n "${ANDROID_SDK_ROOT:-}" ] && [ -d "$ANDROID_SDK_ROOT" ]; then
@@ -150,7 +142,7 @@ jobs:
           elif [ -d "/usr/local/lib/android/sdk" ]; then
             SYSTEM_SDK="/usr/local/lib/android/sdk"
           else
-            echo "ERROR: System Android SDK পাওয়া যায়নি।"
+            echo "ERROR: Android SDK পাওয়া যায়নি।"
             exit 1
           fi
 
@@ -167,39 +159,31 @@ jobs:
 
           if [ -z "$SDKMANAGER" ]; then
             echo "ERROR: sdkmanager পাওয়া যায়নি।"
-            find "$SYSTEM_SDK" \
-              -type f \
-              -name "*sdkmanager*" \
-              -print || true
             exit 1
           fi
 
           echo "sdkmanager পাওয়া গেছে:"
           echo "$SDKMANAGER"
 
-          chmod +x "$SDKMANAGER"
-
           echo
           echo "Android SDK license প্রস্তুত করা হচ্ছে..."
 
-          mkdir -p "$SDK_ROOT/licenses"
+          mkdir -p "$SYSTEM_SDK/licenses"
 
           printf '%s\n' \
             "24333f8a63b6825ea9c5514f83c2829b004d1fee" \
             "d56f5187479451eabf01fb78af6dfcb131a6481e" \
-            > "$SDK_ROOT/licenses/android-sdk-license"
-
-          mkdir -p "$SYSTEM_SDK/licenses"
-
-          cp "$SDK_ROOT/licenses/android-sdk-license" \
-             "$SYSTEM_SDK/licenses/android-sdk-license"
+            > "$SYSTEM_SDK/licenses/android-sdk-license"
 
           echo
-          echo "Android SDK components ইনস্টল করা হচ্ছে..."
+          echo "SDK license গ্রহণ করা হচ্ছে..."
 
           yes | "$SDKMANAGER" \
             --sdk_root="$SYSTEM_SDK" \
             --licenses || true
+
+          echo
+          echo "Android components ইনস্টল করা হচ্ছে..."
 
           "$SDKMANAGER" \
             --sdk_root="$SYSTEM_SDK" \
@@ -211,14 +195,16 @@ jobs:
           echo
           echo "Build-Tools পরীক্ষা..."
 
+          ls -la "$SYSTEM_SDK/build-tools" || true
+
+          echo
+          echo "AIDL খোঁজা হচ্ছে..."
+
           find "$SYSTEM_SDK/build-tools" \
-            -maxdepth 2 \
             -type f \
             -name "aidl" \
             -print || true
 
-          echo
-          echo "SDK প্রস্তুতি সম্পন্ন।"
 
 
       # ==========================================
