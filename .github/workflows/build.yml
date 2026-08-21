@@ -1,34 +1,23 @@
 name: V16 Antivirus APK
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
   build:
     name: Build APK
     runs-on: ubuntu-22.04
 
-    env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-
-      ANDROID_NDK: /usr/local/lib/android/sdk/ndk/28.2.13676358
-      ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/28.2.13676358
-      ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/28.2.13676358
-
-      ANDROIDAPI: "35"
-      ANDROIDMINAPI: "23"
-
     steps:
 
       # ============================================================
-      # 01 — CHECKOUT
+      # 01 — CHECKOUT SOURCE
       # ============================================================
 
-      - name: Checkout Source
+      - name: Checkout source
         uses: actions/checkout@v4
 
 
@@ -36,7 +25,7 @@ jobs:
       # 02 — SETUP PYTHON 3.11
       # ============================================================
 
-      - name: Setup Python
+      - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -54,105 +43,10 @@ jobs:
 
 
       # ============================================================
-      # 04 — VERIFY ANDROID SDK
+      # 04 — INSTALL SYSTEM DEPENDENCIES
       # ============================================================
 
-      - name: Verify Android SDK
-        shell: bash
-        run: |
-          set -e
-
-          echo "=========================================="
-          echo "ANDROID SDK"
-          echo "=========================================="
-
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-
-          test -d "$ANDROID_HOME"
-
-          echo
-          echo "SDK directory:"
-          ls -ld "$ANDROID_HOME"
-
-          echo
-          echo "SDK command line tools:"
-          ls -ld "$ANDROID_HOME/cmdline-tools/latest" || true
-
-          echo
-          echo "Build tools:"
-          ls -ld "$ANDROID_HOME/build-tools/35.0.0" || true
-
-          echo
-          echo "Platform:"
-          ls -ld "$ANDROID_HOME/platforms/android-35" || true
-
-
-      # ============================================================
-      # 05 — VERIFY NDK 28.2
-      # ============================================================
-
-      - name: Verify NDK 28.2
-        shell: bash
-        run: |
-          set -e
-
-          NDK="$ANDROID_NDK"
-
-          echo "=========================================="
-          echo "ANDROID NDK"
-          echo "=========================================="
-
-          echo "ANDROID_NDK=$ANDROID_NDK"
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT"
-
-          test -d "$NDK"
-          test -f "$NDK/source.properties"
-
-          echo
-          echo "NDK directory:"
-          ls -ld "$NDK"
-
-          echo
-          echo "NDK VERSION:"
-          grep "Pkg.Revision" "$NDK/source.properties"
-
-          grep -q "28.2.13676358" "$NDK/source.properties"
-
-
-      # ============================================================
-      # 06 — FORCE NDK PATH
-      # ============================================================
-
-      - name: Force Android NDK Environment
-        shell: bash
-        run: |
-          set -e
-
-          SDK="/usr/local/lib/android/sdk"
-          NDK="$SDK/ndk/28.2.13676358"
-
-          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
-
-          echo "ANDROID_NDK=$NDK" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_ROOT=$NDK" >> "$GITHUB_ENV"
-
-          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
-          echo "$SDK/build-tools/35.0.0" >> "$GITHUB_PATH"
-
-          echo "Forced NDK:"
-          echo "$NDK"
-
-
-      # ============================================================
-      # 07 — INSTALL SYSTEM DEPENDENCIES
-      # ============================================================
-
-      - name: Install System Dependencies
+      - name: Install system dependencies
         shell: bash
         run: |
           set -e
@@ -170,15 +64,15 @@ jobs:
             zlib1g-dev \
             libncurses5-dev \
             libncursesw5-dev \
-            cmake \
-            libffi-dev
+            libffi-dev \
+            libssl-dev
 
 
       # ============================================================
-      # 08 — INSTALL PYTHON BUILD DEPENDENCIES
+      # 05 — INSTALL BUILDOZER
       # ============================================================
 
-      - name: Install Python Build Dependencies
+      - name: Install Buildozer
         shell: bash
         run: |
           set -e
@@ -189,38 +83,159 @@ jobs:
 
           python -m pip install \
             "buildozer==1.5.0" \
-            "cython==0.29.34" \
+            "cython==0.29.37" \
             "setuptools<81" \
             wheel
 
 
       # ============================================================
-      # 09 — VERIFY BUILDOZER
+      # 06 — CONFIGURE ANDROID SDK
       # ============================================================
 
-      - name: Verify Buildozer
+      - name: Configure Android SDK
+        shell: bash
+        run: |
+          set -e
+
+          SDK="/usr/local/lib/android/sdk"
+
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+
+          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
+          echo "$SDK/build-tools/35.0.0" >> "$GITHUB_PATH"
+
+          echo "=========================================="
+          echo "ANDROID SDK"
+          echo "=========================================="
+
+          echo "ANDROID_HOME=$SDK"
+          echo "ANDROID_SDK_ROOT=$SDK"
+
+          echo
+          echo "Checking sdkmanager..."
+
+          if [ -f "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+              echo "sdkmanager FOUND"
+          else
+              echo "ERROR: sdkmanager NOT FOUND"
+              exit 1
+          fi
+
+
+      # ============================================================
+      # 07 — INSTALL ANDROID SDK COMPONENTS
+      # ============================================================
+
+      - name: Install Android SDK components
+        shell: bash
+        run: |
+          set -e
+
+          SDK="/usr/local/lib/android/sdk"
+
+          echo "=========================================="
+          echo "ANDROID SDK COMPONENTS"
+          echo "=========================================="
+
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+
+      # ============================================================
+      # 08 — CONFIGURE NDK 28.2
+      # ============================================================
+
+      - name: Configure Android NDK 28.2
+        shell: bash
+        run: |
+          set -e
+
+          SDK="/usr/local/lib/android/sdk"
+          NDK="$SDK/ndk/28.2.13676358"
+
+          echo "=========================================="
+          echo "ANDROID NDK"
+          echo "=========================================="
+
+          if [ ! -d "$NDK" ]; then
+              echo "NDK 28.2 not found."
+              echo "Installing NDK 28.2..."
+
+              "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+                "ndk;28.2.13676358"
+          fi
+
+          test -f "$NDK/source.properties"
+
+          echo "ANDROID_NDK=$NDK" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$NDK" >> "$GITHUB_ENV"
+
+          echo
+          echo "NDK VERSION:"
+          grep "Pkg.Revision" "$NDK/source.properties"
+
+
+      # ============================================================
+      # 09 — VERIFY JAVA / PYTHON / BUILDOZER
+      # ============================================================
+
+      - name: Verify build environment
         shell: bash
         run: |
           set -e
 
           echo "=========================================="
-          echo "PYTHON / BUILDOZER"
+          echo "PYTHON"
           echo "=========================================="
 
           python --version
+
+          echo
+          echo "=========================================="
+          echo "BUILDOZER"
+          echo "=========================================="
+
           python -m buildozer --version
 
+          echo
+          echo "=========================================="
+          echo "JAVA"
+          echo "=========================================="
+
+          java -version
+          javac -version
+
+          echo
+          echo "=========================================="
+          echo "NDK"
+          echo "=========================================="
+
+          echo "$ANDROID_NDK"
+
+          grep "Pkg.Revision" \
+            "$ANDROID_NDK/source.properties"
+
 
       # ============================================================
-      # 10 — CHECK BUILDOZER SPEC
+      # 10 — CHECK BUILDOZER.SPEC
       # ============================================================
 
-      - name: Check Buildozer Spec
+      - name: Check buildozer.spec
         shell: bash
         run: |
           set -e
 
-          test -f buildozer.spec
+          if [ ! -f buildozer.spec ]; then
+              echo "ERROR: buildozer.spec not found"
+              exit 1
+          fi
 
           echo "=========================================="
           echo "BUILDOZER SPEC"
@@ -230,60 +245,48 @@ jobs:
 
 
       # ============================================================
-      # 11 — REMOVE OLD P4A OVERRIDES
+      # 11 — CLEAN OLD BUILDOZER CACHE
       # ============================================================
 
-      - name: Configure P4A
+      - name: Clean old Buildozer cache
         shell: bash
         run: |
           set -e
 
-          sed -i \
-            '/^[[:space:]]*p4a\.branch[[:space:]]*=/d' \
-            buildozer.spec || true
-
-          sed -i \
-            '/^[[:space:]]*p4a\.commit[[:space:]]*=/d' \
-            buildozer.spec || true
-
-          echo "" >> buildozer.spec
-          echo "p4a.branch = develop" >> buildozer.spec
-
-          echo
-          echo "P4A configuration:"
-          grep -E '^p4a\.(branch|commit)' buildozer.spec || true
-
-
-      # ============================================================
-      # 12 — REMOVE OLD BUILD CACHE
-      # ============================================================
-
-      - name: Clean Build Cache
-        shell: bash
-        run: |
-          set -e
-
-          echo "Cleaning old Buildozer cache..."
+          echo "=========================================="
+          echo "CLEANING OLD BUILD"
+          echo "=========================================="
 
           rm -rf .buildozer
           rm -rf bin
 
           mkdir -p bin
 
+          echo "Old build cache removed."
+
 
       # ============================================================
-      # 13 — FINAL NDK ENVIRONMENT CHECK
+      # 12 — FINAL ANDROID ENVIRONMENT CHECK
       # ============================================================
 
-      - name: Final NDK Check
+      - name: Final Android environment check
         shell: bash
         run: |
           set -e
 
           echo "=========================================="
-          echo "FINAL NDK CHECK"
+          echo "FINAL ANDROID CHECK"
           echo "=========================================="
 
+          echo
+          echo "ANDROID_HOME:"
+          echo "$ANDROID_HOME"
+
+          echo
+          echo "ANDROID_SDK_ROOT:"
+          echo "$ANDROID_SDK_ROOT"
+
+          echo
           echo "ANDROID_NDK:"
           echo "$ANDROID_NDK"
 
@@ -295,65 +298,18 @@ jobs:
           echo "ANDROID_NDK_ROOT:"
           echo "$ANDROID_NDK_ROOT"
 
-          test "$ANDROID_NDK" = \
-            "/usr/local/lib/android/sdk/ndk/28.2.13676358"
-
-          test "$ANDROID_NDK_HOME" = \
-            "/usr/local/lib/android/sdk/ndk/28.2.13676358"
-
-          test "$ANDROID_NDK_ROOT" = \
-            "/usr/local/lib/android/sdk/ndk/28.2.13676358"
-
           echo
           echo "NDK VERSION:"
           grep "Pkg.Revision" \
             "$ANDROID_NDK/source.properties"
 
-
-      # ============================================================
-      # 14 — FINAL JAVA CHECK
-      # ============================================================
-
-      - name: Final Java Check
-        shell: bash
-        run: |
-          set -e
-
-          echo "=========================================="
-          echo "JAVA"
-          echo "=========================================="
-
-          java -version
-          javac -version
-
-
-      # ============================================================
-      # 15 — FINAL SDK CHECK
-      # ============================================================
-
-      - name: Final SDK Check
-        shell: bash
-        run: |
-          set -e
-
-          echo "=========================================="
-          echo "ANDROID SDK CHECK"
-          echo "=========================================="
-
-          echo "SDK:"
-          echo "$ANDROID_HOME"
-
           echo
-          echo "Available build tools:"
-          ls "$ANDROID_HOME/build-tools/" || true
-
-          echo
-          echo "Available platforms:"
-          ls "$ANDROID_HOME/platforms/" || true
+          echo "SDKMANAGER:"
+          which sdkmanager || true
 
 
       # ============================================================
-      # 16 — BUILD APK
+      # 13 — BUILD APK
       # ============================================================
 
       - name: Build APK
@@ -406,10 +362,10 @@ jobs:
 
 
       # ============================================================
-      # 17 — FIND APK
+      # 14 — VERIFY APK
       # ============================================================
 
-      - name: Verify APK
+      - name: Verify generated APK
         shell: bash
         run: |
           set -e
@@ -418,15 +374,9 @@ jobs:
           echo "APK VERIFICATION"
           echo "=========================================="
 
-          echo
-          echo "Searching for APK..."
-
-          find . -type f -name "*.apk" -print
-
           if ! compgen -G "bin/*.apk" > /dev/null; then
-            echo
-            echo "ERROR: APK NOT FOUND"
-            exit 1
+              echo "ERROR: APK NOT FOUND"
+              exit 1
           fi
 
           echo
@@ -435,7 +385,7 @@ jobs:
 
 
       # ============================================================
-      # 18 — UPLOAD APK
+      # 15 — UPLOAD APK
       # ============================================================
 
       - name: Upload APK
@@ -444,12 +394,28 @@ jobs:
           name: V16-Antivirus-Pro-APK
           path: bin/*.apk
           if-no-files-found: error
-          retention-days: 30     
+          retention-days: 30
+
+
+      # ============================================================
+      # 16 — SUCCESS SUMMARY
+      # ============================================================
+
       - name: Build Summary
         if: success()
+        shell: bash
         run: |
           echo "=========================================="
           echo "APK BUILD SUCCESSFUL"
           echo "=========================================="
-          echo "APK files:"
+
+          echo
+          echo "Generated APK:"
           ls -lh bin/*.apk
+
+          echo
+          echo "Artifact:"
+          echo "V16-Antivirus-Pro-APK"
+
+          echo
+          echo "BUILD COMPLETE"
