@@ -124,29 +124,37 @@ jobs:
 
           echo "Build directory প্রস্তুত হয়েছে"
 
-                  # ==========================================
-      # ৯. Android SDK প্রস্তুত করা
+              # ==========================================
+      # ৯. Buildozer-এর Android SDK প্রস্তুত করা
       # ==========================================
-      - name: Android SDK প্রস্তুত করা
+      - name: Buildozer Android SDK প্রস্তুতি
         run: |
           echo "=========================================="
-          echo "ANDROID SDK প্রস্তুত করা হচ্ছে"
+          echo "BUILDOZER ANDROID SDK"
           echo "=========================================="
 
           SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
 
-          if [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME" ]; then
+          echo "SDK ROOT:"
+          echo "$SDK_ROOT"
+
+          mkdir -p "$SDK_ROOT"
+
+          echo
+          echo "System SDK খোঁজা হচ্ছে..."
+
+          if [ -d "/usr/local/lib/android/sdk" ]; then
+            SYSTEM_SDK="/usr/local/lib/android/sdk"
+          elif [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME" ]; then
             SYSTEM_SDK="$ANDROID_HOME"
           elif [ -n "${ANDROID_SDK_ROOT:-}" ] && [ -d "$ANDROID_SDK_ROOT" ]; then
             SYSTEM_SDK="$ANDROID_SDK_ROOT"
-          elif [ -d "/usr/local/lib/android/sdk" ]; then
-            SYSTEM_SDK="/usr/local/lib/android/sdk"
           else
-            echo "ERROR: Android SDK পাওয়া যায়নি।"
+            echo "ERROR: System Android SDK পাওয়া যায়নি।"
             exit 1
           fi
 
-          echo "System SDK:"
+          echo "SYSTEM SDK:"
           echo "$SYSTEM_SDK"
 
           echo
@@ -154,7 +162,7 @@ jobs:
 
           SDKMANAGER="$(find "$SYSTEM_SDK" \
             -type f \
-            -name "sdkmanager" \
+            -name sdkmanager \
             -print -quit)"
 
           if [ -z "$SDKMANAGER" ]; then
@@ -162,48 +170,97 @@ jobs:
             exit 1
           fi
 
-          echo "sdkmanager পাওয়া গেছে:"
+          echo "SDKMANAGER:"
           echo "$SDKMANAGER"
 
           echo
-          echo "Android SDK license প্রস্তুত করা হচ্ছে..."
+          echo "Android license প্রস্তুত করা হচ্ছে..."
 
           mkdir -p "$SYSTEM_SDK/licenses"
+          mkdir -p "$SDK_ROOT/licenses"
 
           printf '%s\n' \
             "24333f8a63b6825ea9c5514f83c2829b004d1fee" \
             "d56f5187479451eabf01fb78af6dfcb131a6481e" \
-            > "$SYSTEM_SDK/licenses/android-sdk-license"
+            | tee "$SYSTEM_SDK/licenses/android-sdk-license" \
+              "$SDK_ROOT/licenses/android-sdk-license" \
+              > /dev/null
 
           echo
-          echo "SDK license গ্রহণ করা হচ্ছে..."
+          echo "License গ্রহণ করা হচ্ছে..."
 
           yes | "$SDKMANAGER" \
             --sdk_root="$SYSTEM_SDK" \
             --licenses || true
 
           echo
-          echo "Android components ইনস্টল করা হচ্ছে..."
+          echo "Build-Tools 37 ইনস্টল করা হচ্ছে..."
 
           "$SDKMANAGER" \
             --sdk_root="$SYSTEM_SDK" \
             "platform-tools" \
             "platforms;android-35" \
-            "build-tools;35.0.0" \
             "build-tools;37.0.0"
 
           echo
-          echo "Build-Tools পরীক্ষা..."
+          echo "Build-Tools পাওয়া গেছে কিনা পরীক্ষা..."
 
-          ls -la "$SYSTEM_SDK/build-tools" || true
+          if [ ! -d "$SYSTEM_SDK/build-tools/37.0.0" ]; then
+            echo "ERROR: Build-Tools 37.0.0 ইনস্টল হয়নি।"
+            exit 1
+          fi
+
+          echo "Build-Tools 37.0.0 পাওয়া গেছে।"
 
           echo
-          echo "AIDL খোঁজা হচ্ছে..."
+          echo "Buildozer SDK-তে প্রয়োজনীয় directory তৈরি..."
 
-          find "$SYSTEM_SDK/build-tools" \
+          mkdir -p "$SDK_ROOT"
+
+          rm -rf "$SDK_ROOT/build-tools"
+          rm -rf "$SDK_ROOT/platforms"
+          rm -rf "$SDK_ROOT/platform-tools"
+
+          cp -a "$SYSTEM_SDK/build-tools" \
+            "$SDK_ROOT/build-tools"
+
+          cp -a "$SYSTEM_SDK/platforms" \
+            "$SDK_ROOT/platforms"
+
+          cp -a "$SYSTEM_SDK/platform-tools" \
+            "$SDK_ROOT/platform-tools"
+
+          echo
+          echo "Buildozer SDK পরীক্ষা..."
+
+          ls -la "$SDK_ROOT"
+
+          echo
+          echo "Build-Tools:"
+          ls -la "$SDK_ROOT/build-tools"
+
+          echo
+          echo "AIDL:"
+          find "$SDK_ROOT/build-tools" \
             -type f \
-            -name "aidl" \
-            -print || true
+            -name aidl \
+            -print
+
+          if find "$SDK_ROOT/build-tools" \
+            -type f \
+            -name aidl \
+            | grep -q aidl; then
+
+            echo
+            echo "AIDL সফলভাবে পাওয়া গেছে।"
+
+          else
+
+            echo
+            echo "ERROR: AIDL পাওয়া যায়নি।"
+            exit 1
+
+          fi
 
 
 
