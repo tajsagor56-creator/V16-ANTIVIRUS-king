@@ -48,3 +48,207 @@ jobs:
       - name: Buildozer Version
         run: |
           buildozer --version
+                # ==========================================
+      # ৮. Android SDK প্রস্তুতি
+      # ==========================================
+      - name: Android SDK প্রস্তুতি
+        run: |
+          echo "=========================================="
+          echo "ANDROID SDK PREPARATION"
+          echo "=========================================="
+
+          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
+
+          echo "SDK ROOT:"
+          echo "$SDK_ROOT"
+
+          mkdir -p "$SDK_ROOT"
+
+
+          # ==========================================
+          # Android Command Line Tools ডাউনলোড
+          # ==========================================
+          echo
+          echo "Android Command Line Tools ডাউনলোড হচ্ছে..."
+
+          mkdir -p "$HOME/android-cmdline-tools"
+
+          curl -L \
+            -o "$HOME/android-cmdline-tools.zip" \
+            "https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip"
+
+
+          # ==========================================
+          # Command Line Tools Extract
+          # ==========================================
+          echo
+          echo "Command Line Tools Extract হচ্ছে..."
+
+          rm -rf "$HOME/android-cmdline-tools/latest"
+
+          mkdir -p "$HOME/android-cmdline-tools/latest"
+
+          unzip -q \
+            "$HOME/android-cmdline-tools.zip" \
+            -d "$HOME/android-cmdline-tools/temp"
+
+
+          # ==========================================
+          # সঠিক Directory তৈরি
+          # ==========================================
+          mkdir -p "$HOME/android-cmdline-tools/latest"
+
+          cp -r \
+            "$HOME/android-cmdline-tools/temp/cmdline-tools/"* \
+            "$HOME/android-cmdline-tools/latest/"
+
+
+          # ==========================================
+          # Buildozer SDK-তে Command Line Tools কপি
+          # ==========================================
+          mkdir -p "$SDK_ROOT/cmdline-tools"
+
+          rm -rf "$SDK_ROOT/cmdline-tools/latest"
+
+          cp -r \
+            "$HOME/android-cmdline-tools/latest" \
+            "$SDK_ROOT/cmdline-tools/latest"
+
+
+          # ==========================================
+          # sdkmanager নির্ধারণ
+          # ==========================================
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+
+          echo
+          echo "SDKMANAGER:"
+          echo "$SDKMANAGER"
+
+
+          # ==========================================
+          # sdkmanager পরীক্ষা
+          # ==========================================
+          if [ ! -f "$SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager পাওয়া যায়নি।"
+
+            echo
+            echo "sdkmanager খোঁজা হচ্ছে:"
+
+            find "$SDK_ROOT" \
+              -type f \
+              -name "sdkmanager" \
+              -print || true
+
+            exit 1
+          fi
+
+
+          chmod +x "$SDKMANAGER"
+
+
+          # ==========================================
+          # Android SDK License
+          # ==========================================
+          echo
+          echo "Android SDK License প্রস্তুত হচ্ছে..."
+
+          mkdir -p "$SDK_ROOT/licenses"
+
+          cat > "$SDK_ROOT/licenses/android-sdk-license" << 'EOF'
+24333f8a63b6825ea9c5514f83c2829b004d1fee
+d56f5187479451eabf01fb78af6dfcb131a6481e
+EOF
+
+
+          # ==========================================
+          # License গ্রহণ
+          # ==========================================
+          echo
+          echo "Android License গ্রহণ করা হচ্ছে..."
+
+          yes | "$SDKMANAGER" \
+            --sdk_root="$SDK_ROOT" \
+            --licenses || true
+
+
+          # ==========================================
+          # Android SDK Components ইনস্টল
+          # ==========================================
+          echo
+          echo "Android SDK Components ইনস্টল হচ্ছে..."
+
+          "$SDKMANAGER" \
+            --sdk_root="$SDK_ROOT" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+
+          # ==========================================
+          # AIDL পরীক্ষা
+          # ==========================================
+          echo
+          echo "=========================================="
+          echo "AIDL পরীক্ষা"
+          echo "=========================================="
+
+          AIDL="$SDK_ROOT/build-tools/35.0.0/aidl"
+
+          if [ ! -f "$AIDL" ]; then
+            echo "ERROR: AIDL পাওয়া যায়নি।"
+
+            echo
+            echo "Build-Tools-এর ভিতরে AIDL খোঁজা হচ্ছে:"
+
+            find "$SDK_ROOT/build-tools" \
+              -type f \
+              -name "aidl" \
+              -print || true
+
+            exit 1
+          fi
+
+          chmod +x "$AIDL"
+
+          echo
+          echo "AIDL পাওয়া গেছে:"
+          echo "$AIDL"
+
+          "$AIDL" --version || true
+
+
+          # ==========================================
+          # SDKMANAGER পরীক্ষা
+          # ==========================================
+          echo
+          echo "=========================================="
+          echo "SDKMANAGER পরীক্ষা"
+          echo "=========================================="
+
+          "$SDKMANAGER" \
+            --sdk_root="$SDK_ROOT" \
+            --version
+
+
+          # ==========================================
+          # SDK সম্পূর্ণ পরীক্ষা
+          # ==========================================
+          echo
+          echo "=========================================="
+          echo "ANDROID SDK READY"
+          echo "=========================================="
+
+          echo "SDK:"
+          echo "$SDK_ROOT"
+
+          echo
+          echo "Build Tools:"
+          ls -la "$SDK_ROOT/build-tools"
+
+          echo
+          echo "Platforms:"
+          ls -la "$SDK_ROOT/platforms"
+
+          echo
+          echo "Platform Tools:"
+          ls -la "$SDK_ROOT/platform-tools"
