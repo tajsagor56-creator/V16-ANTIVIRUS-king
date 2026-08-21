@@ -40,9 +40,9 @@ jobs:
 
 
       # ==========================================
-      # ৪. Linux Package ইনস্টল
+      # ৪. প্রয়োজনীয় Linux Package ইনস্টল
       # ==========================================
-      - name: প্রয়োজনীয় Package ইনস্টল
+      - name: Linux Package ইনস্টল
         run: |
           sudo apt-get update
 
@@ -50,6 +50,8 @@ jobs:
             git \
             zip \
             unzip \
+            curl \
+            wget \
             autoconf \
             automake \
             libtool \
@@ -77,7 +79,6 @@ jobs:
       # ==========================================
       - name: Project পরীক্ষা
         run: |
-
           echo "=========================================="
           echo "PROJECT FILES"
           echo "=========================================="
@@ -111,7 +112,6 @@ jobs:
       # ==========================================
       - name: Python Syntax পরীক্ষা
         run: |
-
           python -m py_compile main.py
 
           echo
@@ -121,131 +121,240 @@ jobs:
 
 
       # ==========================================
-      # ৮. GitHub Android SDK অবস্থান পরীক্ষা
+      # ৮. Android SDK পরীক্ষা
       # ==========================================
-      - name: Android SDK খোঁজা
+      - name: Android SDK পরীক্ষা
         run: |
+          set -e
 
           echo "=========================================="
-          echo "ANDROID SDK খোঁজা হচ্ছে"
+          echo "ANDROID SDK পরীক্ষা"
           echo "=========================================="
 
-          echo "ANDROID_HOME:"
-          echo "${ANDROID_HOME:-নির্ধারিত নয়}"
-
-          echo
-          echo "ANDROID_SDK_ROOT:"
-          echo "${ANDROID_SDK_ROOT:-নির্ধারিত নয়}"
-
-          echo
-          echo "সম্ভাব্য SDK খোঁজা হচ্ছে..."
-
-          find /usr/local/lib/android/sdk \
-            -type f \
-            -name sdkmanager \
-            -print 2>/dev/null || true
-
-          echo
-          echo "SDK directory:"
-
-          ls -la /usr/local/lib/android/sdk 2>/dev/null || true
-
-
-      # ==========================================
-      # ৯. Buildozer-এর Android SDK প্রস্তুত
-      # ==========================================
-      - name: Buildozer SDK প্রস্তুতি
-        run: |
-
-          echo "=========================================="
-          echo "BUILDOZER SDK প্রস্তুতি"
-          echo "=========================================="
-
-          BUILD_SDK="$HOME/.buildozer/android/platform/android-sdk"
           SYSTEM_SDK="/usr/local/lib/android/sdk"
+
+          echo "SYSTEM SDK:"
+          echo "$SYSTEM_SDK"
+
+          if [ ! -d "$SYSTEM_SDK" ]; then
+            echo "ERROR: Android SDK পাওয়া যায়নি।"
+            exit 1
+          fi
+
+          echo
+          echo "SDK DIRECTORY:"
+          ls -la "$SYSTEM_SDK"
+
+          echo
+          echo "SDKMANAGER খোঁজা হচ্ছে..."
+
+          find "$SYSTEM_SDK" \
+            -type f \
+            -name "sdkmanager" \
+            -print || true
+
+
+      # ==========================================
+      # ৯. Android SDK Components ইনস্টল
+      # ==========================================
+      - name: Android SDK Components
+        run: |
+          set -e
+
+          echo "=========================================="
+          echo "ANDROID COMPONENTS"
+          echo "=========================================="
+
+          SYSTEM_SDK="/usr/local/lib/android/sdk"
+
+          SDKMANAGER="$(find "$SYSTEM_SDK" \
+            -type f \
+            -name "sdkmanager" \
+            -print -quit)"
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager পাওয়া যায়নি।"
+            exit 1
+          fi
+
+          echo "SDKMANAGER:"
+          echo "$SDKMANAGER"
+
+          chmod +x "$SDKMANAGER"
+
+          mkdir -p "$SYSTEM_SDK/licenses"
+
+          cat > "$SYSTEM_SDK/licenses/android-sdk-license" << 'EOF'
+24333f8a63b6825ea9c5514f83c2829b004d1fee
+d56f5187479451eabf01fb78af6dfcb131a6481e
+EOF
+
+          yes | "$SDKMANAGER" \
+            --sdk_root="$SYSTEM_SDK" \
+            --licenses || true
+
+          "$SDKMANAGER" \
+            --sdk_root="$SYSTEM_SDK" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+          echo
+          echo "=========================================="
+          echo "AIDL পরীক্ষা"
+          echo "=========================================="
+
+          AIDL="$SYSTEM_SDK/build-tools/35.0.0/aidl"
+
+          if [ ! -f "$AIDL" ]; then
+            echo "ERROR: AIDL পাওয়া যায়নি।"
+
+            find "$SYSTEM_SDK/build-tools" \
+              -type f \
+              -name "aidl" \
+              -print || true
+
+            exit 1
+          fi
+
+          chmod +x "$AIDL"
+
+          echo "AIDL পাওয়া গেছে:"
+          "$AIDL" --version || true
+
+
+      # ==========================================
+      # ১০. Buildozer-এর SDK Path প্রস্তুত
+      # ==========================================
+      - name: Buildozer SDK Path প্রস্তুতি
+        run: |
+          set -e
+
+          echo "=========================================="
+          echo "BUILDOZER SDK PATH"
+          echo "=========================================="
+
+          SYSTEM_SDK="/usr/local/lib/android/sdk"
+          BUILD_SDK="$HOME/.buildozer/android/platform/android-sdk"
+
+          rm -rf "$HOME/.buildozer"
+
+          mkdir -p "$BUILD_SDK"
 
           echo "Buildozer SDK:"
           echo "$BUILD_SDK"
 
+          echo
           echo "System SDK:"
           echo "$SYSTEM_SDK"
 
-          # Buildozer SDK directory তৈরি
-          mkdir -p "$BUILD_SDK"
 
-          # System SDK থেকে প্রয়োজনীয় directory link করা
-          if [ -d "$SYSTEM_SDK/platform-tools" ]; then
-            ln -sfn \
-              "$SYSTEM_SDK/platform-tools" \
-              "$BUILD_SDK/platform-tools"
-          fi
+          # ==========================================
+          # System SDK-এর অংশগুলো Buildozer SDK-তে link
+          # ==========================================
 
-          if [ -d "$SYSTEM_SDK/platforms" ]; then
-            ln -sfn \
-              "$SYSTEM_SDK/platforms" \
-              "$BUILD_SDK/platforms"
-          fi
+          ln -s \
+            "$SYSTEM_SDK/platform-tools" \
+            "$BUILD_SDK/platform-tools"
 
-          if [ -d "$SYSTEM_SDK/build-tools" ]; then
-            ln -sfn \
-              "$SYSTEM_SDK/build-tools" \
-              "$BUILD_SDK/build-tools"
-          fi
+          ln -s \
+            "$SYSTEM_SDK/platforms" \
+            "$BUILD_SDK/platforms"
 
-          if [ -d "$SYSTEM_SDK/cmdline-tools" ]; then
-            ln -sfn \
-              "$SYSTEM_SDK/cmdline-tools" \
-              "$BUILD_SDK/cmdline-tools"
-          fi
+          ln -s \
+            "$SYSTEM_SDK/build-tools" \
+            "$BUILD_SDK/build-tools"
 
-          echo
-          echo "Buildozer SDK contents:"
-
-          ls -la "$BUILD_SDK"
+          ln -s \
+            "$SYSTEM_SDK/cmdline-tools" \
+            "$BUILD_SDK/cmdline-tools"
 
 
-      # ==========================================
-      # ১০. Android SDK License প্রস্তুত
-      # ==========================================
-      - name: Android License প্রস্তুতি
-        run: |
+          # ==========================================
+          # Buildozer পুরোনো tools path আশা করে
+          # তাই tools directory তৈরি করা হচ্ছে
+          # ==========================================
 
-          echo "=========================================="
-          echo "ANDROID LICENSE"
-          echo "=========================================="
+          mkdir -p "$BUILD_SDK/tools"
 
-          BUILD_SDK="$HOME/.buildozer/android/platform/android-sdk"
+          ln -s \
+            "$SYSTEM_SDK/cmdline-tools/latest" \
+            "$BUILD_SDK/tools/latest"
+
+          mkdir -p "$BUILD_SDK/tools/bin"
+
+          ln -s \
+            "$SYSTEM_SDK/cmdline-tools/latest/bin/sdkmanager" \
+            "$BUILD_SDK/tools/bin/sdkmanager"
+
+
+          # ==========================================
+          # License
+          # ==========================================
 
           mkdir -p "$BUILD_SDK/licenses"
 
-          touch "$BUILD_SDK/licenses/android-sdk-license"
+          cat > "$BUILD_SDK/licenses/android-sdk-license" << 'EOF'
+24333f8a63b6825ea9c5514f83c2829b004d1fee
+d56f5187479451eabf01fb78af6dfcb131a6481e
+EOF
 
-          echo "Android SDK license directory প্রস্তুত।"
 
-          ls -la "$BUILD_SDK/licenses"
+          # ==========================================
+          # sdkmanager পরীক্ষা
+          # ==========================================
+
+          echo
+          echo "=========================================="
+          echo "BUILDOZER SDK CHECK"
+          echo "=========================================="
+
+          if [ ! -x "$BUILD_SDK/tools/bin/sdkmanager" ]; then
+            echo "ERROR: Buildozer sdkmanager তৈরি হয়নি।"
+
+            find "$BUILD_SDK" \
+              -type f \
+              -name "sdkmanager" \
+              -print || true
+
+            exit 1
+          fi
+
+          echo "Buildozer sdkmanager:"
+          "$BUILD_SDK/tools/bin/sdkmanager" --version
+
+
+          # ==========================================
+          # AIDL পরীক্ষা
+          # ==========================================
+
+          echo
+          echo "AIDL:"
+
+          "$BUILD_SDK/build-tools/35.0.0/aidl" \
+            --version || true
 
 
       # ==========================================
-      # ১১. পুরোনো Build পরিষ্কার
+      # ১১. Build Cache পরিষ্কার
       # ==========================================
-      - name: Build পরিষ্কার
+      - name: Build Cache পরিষ্কার
         run: |
-
           echo "=========================================="
-          echo "BUILD CLEAN"
+          echo "BUILD CACHE CLEAN"
           echo "=========================================="
 
-          rm -rf .buildozer
           rm -rf bin
 
           mkdir -p bin
 
 
       # ==========================================
-      # ১২. APK তৈরি
+      # ১২. Buildozer APK তৈরি
       # ==========================================
       - name: APK তৈরি
         run: |
+          set -e
 
           echo "=========================================="
           echo "V16 ANTIVIRUS APK BUILD"
@@ -260,7 +369,6 @@ jobs:
       - name: APK পরীক্ষা
         if: always()
         run: |
-
           echo
           echo "=========================================="
           echo "GENERATED APK"
@@ -286,12 +394,19 @@ jobs:
             echo "ERROR: APK তৈরি হয়নি।"
 
             echo
-            echo "APK খোঁজা হচ্ছে..."
+            echo "পুরো Project-এ APK খোঁজা হচ্ছে..."
 
             find . \
               -type f \
               \( -name "*.apk" -o -name "*.aab" \) \
               -print || true
+
+            echo
+            echo "Build directory:"
+            find .buildozer \
+              -maxdepth 4 \
+              -type d \
+              -print 2>/dev/null || true
 
             exit 1
 
