@@ -13,8 +13,8 @@ version = 16.2
 orientation = portrait
 fullscreen = 0
 
+# Force Python 3.11 build
 python_version = 3.11
-python_for_android_debug = 1
 
 requirements = python3,kivy,plyer
 
@@ -38,10 +38,12 @@ android.ndk_path = /home/runner/.buildozer/android/platform/android-ndk-r28c
 
 android.accept_sdk_license = True
 
-# Python for Android configuration
-p4a.version = 2024.1.21
-p4a.bootstrap = sdl2
-p4a.requirements = python3==3.11,kivy,plyer
+# Disable unwanted recipes to speed up build
+p4a.skip_update = False
+p4a.ignore_setup_py = False
+
+# Use cython
+p4a.hook = ./p4a_hook.py
 
 
 [buildozer]
