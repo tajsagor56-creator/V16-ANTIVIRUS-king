@@ -13,7 +13,7 @@ jobs:
     steps:
 
       # ==========================================
-      # ১. GitHub Repository থেকে Project নেওয়া
+      # ১. Repository থেকে Project সংগ্রহ
       # ==========================================
       - name: Repository Checkout
         uses: actions/checkout@v4
@@ -46,7 +46,7 @@ jobs:
 
 
       # ==========================================
-      # ৫. প্রয়োজনীয় Linux Packages ইনস্টল
+      # ৫. Linux Build Packages ইনস্টল
       # ==========================================
       - name: System Packages ইনস্টল
         run: |
@@ -67,25 +67,99 @@ jobs:
 
 
       # ==========================================
-      # ৬. Android SDK Components ইনস্টল
+      # ৬. Python Build Packages ইনস্টল
+      # ==========================================
+      - name: Python Build Packages ইনস্টল
+        run: |
+          python -m pip install --upgrade pip
+
+          python -m pip install \
+            buildozer==1.6.0 \
+            cython==0.29.37 \
+            virtualenv
+
+
+      # ==========================================
+      # ৭. Python Source Code পরীক্ষা
+      # ==========================================
+      - name: main.py Syntax পরীক্ষা
+        run: |
+          echo "=========================================="
+          echo "MAIN.PY SYNTAX TEST"
+          echo "=========================================="
+
+          python -m py_compile main.py
+
+          echo "main.py Syntax OK"
+
+
+      # ==========================================
+      # ৮. Project Files পরীক্ষা
+      # ==========================================
+      - name: Project পরীক্ষা
+        run: |
+          echo "=========================================="
+          echo "PROJECT FILES"
+          echo "=========================================="
+
+          ls -la
+
+          echo
+          echo "=========================================="
+          echo "PYTHON"
+          echo "=========================================="
+
+          python --version
+
+          echo
+          echo "=========================================="
+          echo "JAVA"
+          echo "=========================================="
+
+          java -version
+
+          echo
+          echo "=========================================="
+          echo "BUILDOZER"
+          echo "=========================================="
+
+          buildozer --version
+
+
+      # ==========================================
+      # ৯. GitHub Runner-এর Android SDK প্রস্তুত
       # ==========================================
       - name: Android SDK Components ইনস্টল
         run: |
 
           echo "=========================================="
-          echo "ANDROID SDK COMPONENTS"
+          echo "ANDROID SDK PREPARATION"
           echo "=========================================="
 
-          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_HOME:"
+          echo "$ANDROID_HOME"
 
-          # Android SDK License গ্রহণ
+          echo
+          echo "SDK Manager:"
+          command -v sdkmanager || true
+
+          echo
+          echo "Android SDK License গ্রহণ"
+
           yes | sdkmanager --licenses > /dev/null || true
 
-          # Android SDK Platform এবং Build Tools ইনস্টল
+          echo
+          echo "Android 35 Platform ইনস্টল"
+
           sdkmanager \
             "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+            "platforms;android-35"
+
+          echo
+          echo "Build Tools 37 ইনস্টল"
+
+          sdkmanager \
+            "build-tools;37.0.0"
 
           echo
           echo "=========================================="
@@ -102,85 +176,25 @@ jobs:
             -name "aidl" \
             | grep -q "aidl"; then
 
-            echo "AIDL পাওয়া গেছে।"
+            echo "AIDL FOUND"
 
           else
 
-            echo "ERROR: AIDL পাওয়া যায়নি।"
+            echo "ERROR: AIDL NOT FOUND"
             exit 1
 
           fi
 
 
       # ==========================================
-      # ৭. Python Build Packages ইনস্টল
+      # ১০. পুরোনো Build Cache পরিষ্কার
       # ==========================================
-      - name: Build Packages ইনস্টল
-        run: |
-
-          python -m pip install --upgrade pip
-
-          python -m pip install \
-            buildozer==1.6.0 \
-            cython==0.29.37 \
-            virtualenv
-
-
-      # ==========================================
-      # ৮. Project পরীক্ষা
-      # ==========================================
-      - name: Project পরীক্ষা
+      - name: Build Cache পরিষ্কার
         run: |
 
           echo "=========================================="
-          echo "PROJECT FILES"
+          echo "CLEANING OLD BUILD"
           echo "=========================================="
-
-          ls -la
-
-          echo
-          echo "=========================================="
-          echo "PYTHON VERSION"
-          echo "=========================================="
-
-          python --version
-
-          echo
-          echo "=========================================="
-          echo "JAVA VERSION"
-          echo "=========================================="
-
-          java -version
-
-          echo
-          echo "=========================================="
-          echo "BUILDOZER VERSION"
-          echo "=========================================="
-
-          buildozer --version
-
-
-      # ==========================================
-      # ৯. main.py Syntax পরীক্ষা
-      # ==========================================
-      - name: Python Syntax পরীক্ষা
-        run: |
-
-          echo "=========================================="
-          echo "MAIN.PY SYNTAX TEST"
-          echo "=========================================="
-
-          python -m py_compile main.py
-
-          echo
-          echo "main.py Syntax OK"
-
-
-      # ==========================================
-      # ১০. আগের Build পরিষ্কার
-      # ==========================================
-      - name: পুরোনো Build পরিষ্কার
-        run: |
 
           rm -rf .buildozer
           rm -rf bin
@@ -189,7 +203,7 @@ jobs:
 
 
       # ==========================================
-      # ১১. Android Environment সেট করা
+      # ১১. Buildozer-এর জন্য Android Environment
       # ==========================================
       - name: Android Environment সেটআপ
         run: |
@@ -204,31 +218,28 @@ jobs:
 
           echo "JAVA_HOME=$JAVA_HOME"
 
-          # Buildozer-কে GitHub Actions-এর Android SDK ব্যবহার করতে বলা
-          echo "ANDROIDSDK=$ANDROID_HOME" >> "$GITHUB_ENV"
-
           echo "ANDROIDAPI=35" >> "$GITHUB_ENV"
 
           echo "ANDROIDMINAPI=23" >> "$GITHUB_ENV"
 
-          echo "ANDROIDNDK_HOME=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
-
 
       # ==========================================
-      # ১২. Buildozer Android Debug APK Build
+      # ১২. Buildozer প্রথমবার প্রস্তুত করা
       # ==========================================
-      - name: APK Build
+      - name: Buildozer প্রস্তুতি
         run: |
 
           echo "=========================================="
-          echo "BUILDING V16 ANTIVIRUS APK"
+          echo "BUILDOZER PREPARATION"
           echo "=========================================="
+
+          buildozer android clean || true
 
           buildozer -v android debug
 
 
       # ==========================================
-      # ১৩. APK তৈরি হয়েছে কি না পরীক্ষা
+      # ১৩. APK পরীক্ষা
       # ==========================================
       - name: APK পরীক্ষা
         if: always()
@@ -250,7 +261,7 @@ jobs:
             echo "ERROR: APK তৈরি হয়নি।"
 
             echo
-            echo "Project-এর মধ্যে APK খোঁজা হচ্ছে..."
+            echo "পুরো Project-এ APK খোঁজা হচ্ছে..."
 
             find . \
               -type f \
@@ -263,7 +274,7 @@ jobs:
 
 
       # ==========================================
-      # ১৪. APK GitHub Artifact হিসেবে Upload
+      # ১৪. APK Artifact হিসেবে Upload
       # ==========================================
       - name: APK Upload
         if: success()
