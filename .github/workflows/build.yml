@@ -124,9 +124,31 @@ jobs:
 
           echo "Build directory প্রস্তুত হয়েছে"
 
+      # ==========================================
+      # ৯. Android SDK License প্রস্তুতি
+      # ==========================================
+      - name: Android SDK License প্রস্তুতি
+        run: |
+          echo "=========================================="
+          echo "ANDROID SDK LICENSE"
+          echo "=========================================="
+
+          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
+
+          mkdir -p "$SDK_ROOT/licenses"
+
+          printf '%s\n' \
+            "24333f8a63b6825ea9c5514f83c2829b004d1fee" \
+            "d56f5187479451eabf01fb78af6dfcb131a6481e" \
+            > "$SDK_ROOT/licenses/android-sdk-license"
+
+          echo "Android SDK license প্রস্তুত হয়েছে।"
+
+          cat "$SDK_ROOT/licenses/android-sdk-license"
+
 
       # ==========================================
-      # ৯. APK তৈরি
+      # ১০. APK তৈরি
       # ==========================================
       - name: APK তৈরি
         run: |
@@ -138,45 +160,28 @@ jobs:
 
 
       # ==========================================
-      # ১০. APK পরীক্ষা
+      # ১১. APK পরীক্ষা
       # ==========================================
       - name: APK পরীক্ষা
         if: always()
         run: |
-          echo
           echo "=========================================="
           echo "GENERATED APK"
           echo "=========================================="
 
           if [ -d "bin" ] && find bin -maxdepth 1 -type f -name "*.apk" | grep -q ".apk"; then
-
             echo "APK সফলভাবে তৈরি হয়েছে।"
-
-            find bin \
-              -maxdepth 1 \
-              -type f \
-              -name "*.apk" \
-              -exec ls -lh {} \;
-
+            find bin -maxdepth 1 -type f -name "*.apk" -exec ls -lh {} \;
           else
-
-            echo "ERROR: APK তৈরি হয়নি।"
-
-            echo
+            echo "ERROR: APK তৈরি হয়নি."
             echo "APK খোঁজা হচ্ছে..."
-
-            find . \
-              -type f \
-              \( -name "*.apk" -o -name "*.aab" \) \
-              -print || true
-
+            find . -type f \( -name "*.apk" -o -name "*.aab" \) -print || true
             exit 1
-
           fi
 
 
       # ==========================================
-      # ১১. APK Upload
+      # ১২. APK Upload
       # ==========================================
       - name: APK Upload
         if: success()
