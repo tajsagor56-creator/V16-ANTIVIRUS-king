@@ -390,7 +390,126 @@ jobs:
 
 
       # =====================================================
-      # 13. Build V16 Antivirus APK
+      # 13. Prepare Buildozer Android Paths
+      # =====================================================
+      - name: Prepare Buildozer Android Paths
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          echo "=========================================="
+          echo "PREPARE BUILDOZER ANDROID PATHS"
+          echo "=========================================="
+
+          SDK="/usr/local/lib/android/sdk"
+          NDK="$SDK/ndk/27.3.13750724"
+
+          test -d "$SDK"
+          test -d "$NDK"
+
+          echo "SDK=$SDK"
+          echo "NDK=$NDK"
+
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("buildozer.spec")
+          text = path.read_text()
+
+          settings = {
+              "android.ndk": "27.3.13750724",
+              "android.ndk_path": "/usr/local/lib/android/sdk/ndk/27.3.13750724",
+              "android.sdk_path": "/usr/local/lib/android/sdk",
+          }
+
+          lines = text.splitlines()
+          output = []
+          found = set()
+
+          for line in lines:
+              stripped = line.strip()
+
+              replaced = False
+
+              for key, value in settings.items():
+                  if stripped.startswith(key + " ="):
+                      if key not in found:
+                          output.append(f"{key} = {value}")
+                          found.add(key)
+                      replaced = True
+                      break
+
+              if not replaced:
+                  output.append(line)
+
+          for key, value in settings.items():
+              if key not in found:
+                  output.append(f"{key} = {value}")
+
+          path.write_text("\n".join(output) + "\n")
+
+          print("buildozer.spec updated.")
+          PY
+
+          echo
+          echo "Android settings:"
+          grep -E \
+            '^(android.ndk|android.ndk_path|android.sdk_path|android.api|android.minapi)' \
+            buildozer.spec || true
+
+
+      # =====================================================
+      # 14. Remove Broken Buildozer Android Cache
+      # =====================================================
+      - name: Clean Buildozer Android Cache
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          echo "=========================================="
+          echo "CLEAN BUILDOZER CACHE"
+          echo "=========================================="
+
+          rm -rf .buildozer/android/platform/android-ndk-*
+          rm -rf .buildozer/android/platform/android-sdk
+
+          mkdir -p .buildozer/android/platform
+
+          echo "Broken Android cache removed."
+
+
+      # =====================================================
+      # 15. Final NDK Check
+      # =====================================================
+      - name: Final NDK Check
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          echo "=========================================="
+          echo "FINAL NDK CHECK"
+          echo "=========================================="
+
+          NDK="/usr/local/lib/android/sdk/ndk/27.3.13750724"
+
+          test -d "$NDK"
+          test -f "$NDK/source.properties"
+          test -x "$NDK/ndk-build"
+
+          echo
+          echo "NDK path:"
+          echo "$NDK"
+
+          echo
+          echo "NDK information:"
+          cat "$NDK/source.properties"
+
+          echo
+          echo "NDK check successful."
+
+
+      # =====================================================
+      # 16. Build V16 Antivirus APK
       # =====================================================
       - name: Build V16 Antivirus APK
         shell: bash
@@ -401,21 +520,38 @@ jobs:
           echo "BUILD V16 ANTIVIRUS APK"
           echo "=========================================="
 
+          echo
+          echo "Python:"
+          python --version
+
+          echo
+          echo "Buildozer:"
           python -m buildozer --version
 
           echo
-          echo "Starting Buildozer..."
+          echo "ANDROID_HOME:"
+          echo "$ANDROID_HOME"
 
-          python -m buildozer -v android debug
+          echo
+          echo "ANDROID_NDK_HOME:"
+          echo "$ANDROID_NDK_HOME"
+
+          echo
+          echo "Buildozer Android settings:"
+          grep -E \
+            '^(android.ndk|android.ndk_path|android.sdk_path|android.api|android.minapi)' \
+            buildozer.spec || true
 
           echo
           echo "=========================================="
-          echo "BUILD COMMAND FINISHED"
+          echo "STARTING APK BUILD"
           echo "=========================================="
+
+          python -m buildozer -v android debug
 
 
       # =====================================================
-      # 14. Search APK / AAB
+      # 17. Find APK
       # =====================================================
       - name: Find APK
         if: always()
@@ -424,7 +560,7 @@ jobs:
           set +e
 
           echo "=========================================="
-          echo "SEARCHING APK / AAB"
+          echo "APK FILES"
           echo "=========================================="
 
           echo
@@ -439,12 +575,9 @@ jobs:
             \( -name "*.apk" -o -name "*.aab" \) \
             -print
 
-          echo
-          echo "APK search completed."
-
 
       # =====================================================
-      # 15. Upload APK
+      # 18. Upload APK
       # =====================================================
       - name: Upload V16 Antivirus APK
         if: success()
@@ -458,7 +591,7 @@ jobs:
 
 
       # =====================================================
-      # 16. Upload Build Logs
+      # 19. Upload Build Logs
       # =====================================================
       - name: Upload Build Logs
         if: always()
