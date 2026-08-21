@@ -11,240 +11,40 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-
-      # ==========================================
-      # ১. Repository Checkout
-      # ==========================================
       - name: Repository Checkout
         uses: actions/checkout@v4
 
-      # ==========================================
-      # ২. Python সেটআপ
-      # ==========================================
-      - name: Python সেটআপ
+      - name: Python Setup
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # ==========================================
-      # ৩. Java সেটআপ
-      # ==========================================
-      - name: Java সেটআপ
+      - name: Java Setup
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      # ==========================================
-      # ৪. প্রয়োজনীয় Package
-      # ==========================================
-      - name: প্রয়োজনীয় Package ইনস্টল
+      - name: Project Check
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            git \
-            zip \
-            unzip \
-            autoconf \
-            automake \
-            libtool \
-            pkg-config \
-            zlib1g-dev \
-            libncurses5-dev \
-            libncursesw5-dev \
-            cmake
+          echo "================================"
+          echo "V16 ANTIVIRUS"
+          echo "================================"
+          python --version
+          java -version
+          ls -la
 
-      # ==========================================
-      # ৫. Buildozer ইনস্টল
-      # ==========================================
-      - name: Buildozer ইনস্টল
+      - name: Python Syntax Check
+        run: |
+          python -m py_compile main.py
+          echo "main.py syntax ঠিক আছে"
+
+      - name: Buildozer Install
         run: |
           python -m pip install --upgrade pip
           python -m pip install buildozer==1.6.0
           python -m pip install cython==0.29.37
 
-      # ==========================================
-      # ৬. Project পরীক্ষা
-      # ==========================================
-      - name: Project পরীক্ষা
+      - name: Buildozer Version
         run: |
-          echo "=========================================="
-          echo "PROJECT CHECK"
-          echo "=========================================="
-
-          ls -la
-
-          echo
-          python --version
-
-          echo
-          java -version
-
-          echo
           buildozer --version
-
-      # ==========================================
-      # ৭. main.py পরীক্ষা
-      # ==========================================
-      - name: Python Syntax পরীক্ষা
-        run: |
-          python -m py_compile main.py
-
-          echo "=========================================="
-          echo "main.py ঠিক আছে"
-          echo "=========================================="
-
-      # ==========================================
-      # ৮. Android SDK পরীক্ষা
-      # ==========================================
-      - name: Android SDK পরীক্ষা
-        run: |
-          echo "=========================================="
-          echo "ANDROID SDK"
-          echo "=========================================="
-
-          SDK="/usr/local/lib/android/sdk"
-
-          echo "SDK:"
-          echo "$SDK"
-
-          echo
-          echo "SDK Manager খোঁজা হচ্ছে..."
-
-          find "$SDK" \
-            -type f \
-            -name sdkmanager \
-            -print 2>/dev/null || true
-
-          echo
-          echo "AIDL খোঁজা হচ্ছে..."
-
-          find "$SDK" \
-            -type f \
-            -name aidl \
-            -print 2>/dev/null || true
-
-      # ==========================================
-      # ৯. Android SDK Components
-      # ==========================================
-      - name: Android Components ইনস্টল
-        run: |
-          echo "=========================================="
-          echo "ANDROID COMPONENTS"
-          echo "=========================================="
-
-          SDK="/usr/local/lib/android/sdk"
-
-          SDKMANAGER=$(find "$SDK" \
-            -type f \
-            -name sdkmanager \
-            -print -quit 2>/dev/null || true)
-
-          if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager পাওয়া যায়নি"
-            exit 1
-          fi
-
-          echo "SDKMANAGER:"
-          echo "$SDKMANAGER"
-
-          chmod +x "$SDKMANAGER"
-
-          mkdir -p "$SDK/licenses"
-
-          cat > "$SDK/licenses/android-sdk-license" <<'EOF'
-24333f8a63b6825ea9c5514f83c2829b004d1fee
-d56f5187479451eabf01fb78af6dfcb131a6481e
-EOF
-
-          echo
-          echo "Android SDK Components ইনস্টল করা হচ্ছে..."
-
-          "$SDKMANAGER" \
-            --sdk_root="$SDK" \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
-      # ==========================================
-      # ১০. Android SDK যাচাই
-      # ==========================================
-      - name: Android SDK যাচাই
-        run: |
-          echo "=========================================="
-          echo "ANDROID SDK VERIFY"
-          echo "=========================================="
-
-          SDK="/usr/local/lib/android/sdk"
-
-          echo
-          echo "Build Tools:"
-          ls -la "$SDK/build-tools" || true
-
-          echo
-          echo "AIDL:"
-          find "$SDK/build-tools" \
-            -type f \
-            -name aidl \
-            -print || true
-
-      # ==========================================
-      # ১১. APK তৈরি
-      # ==========================================
-      - name: APK তৈরি
-        run: |
-          echo "=========================================="
-          echo "V16 ANTIVIRUS APK BUILD"
-          echo "=========================================="
-
-          export ANDROID_HOME="/usr/local/lib/android/sdk"
-          export ANDROID_SDK_ROOT="/usr/local/lib/android/sdk"
-
-          buildozer -v android debug
-
-      # ==========================================
-      # ১২. APK পরীক্ষা
-      # ==========================================
-      - name: APK পরীক্ষা
-        if: always()
-        run: |
-          echo "=========================================="
-          echo "GENERATED APK"
-          echo "=========================================="
-
-          if find bin \
-            -maxdepth 1 \
-            -type f \
-            -name "*.apk" \
-            | grep -q .; then
-
-            echo "APK সফলভাবে তৈরি হয়েছে।"
-
-            ls -lh bin/*.apk
-
-          else
-
-            echo "ERROR: APK তৈরি হয়নি।"
-
-            echo
-            echo "APK খোঁজা হচ্ছে..."
-
-            find . \
-              -type f \
-              -name "*.apk" \
-              -print || true
-
-            exit 1
-
-          fi
-
-      # ==========================================
-      # ১৩. APK Upload
-      # ==========================================
-      - name: APK Upload
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: V16-Antivirus-APK
-          path: bin/*.apk
-          if-no-files-found: error
