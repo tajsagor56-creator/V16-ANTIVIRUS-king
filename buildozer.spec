@@ -14,17 +14,15 @@ fullscreen = 0
 
 requirements = python3,kivy,plyer
 
-android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,POST_NOTIFICATIONS
-
 android.api = 35
 android.minapi = 24
 
+android.ndk = 27.3.13750724
+
 android.archs = arm64-v8a
+
+android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,POST_NOTIFICATIONS
 
 android.private_storage = True
 android.allow_backup = False
 android.uses_cleartext_connection = False
-
-[buildozer]
-
-log_level = 2
