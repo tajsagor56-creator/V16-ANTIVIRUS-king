@@ -29,13 +29,13 @@ jobs:
       # 1. Checkout
       # ==========================================
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # ==========================================
       # 2. Python
       # ==========================================
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -43,7 +43,7 @@ jobs:
       # 3. Java 17
       # ==========================================
       - name: Setup Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -376,6 +376,5 @@ jobs:
           name: V16-Buildozer-Full-Logs
           path: |
             build-logs/
-            .buildozer/android/platform/python-for-android/*.log
-            .buildozer/android/platform/build-*/build/*.log
+            .buildozer/**/*.log
           if-no-files-found: warn
