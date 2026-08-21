@@ -6,39 +6,39 @@
 title = V16 Antivirus Pro
 
 # ==========================================
-# Package তথ্য
+# Android package নাম
 # ==========================================
 package.name = v16antivirus
 package.domain = org.kingtaj
 
 # ==========================================
-# Source Directory
+# Source directory
 # ==========================================
 source.dir = .
 
 # ==========================================
-# APK-তে অন্তর্ভুক্ত ফাইল
+# APK-তে যেসব ফাইল যাবে
 # ==========================================
 source.include_exts = py,json,png,jpg,jpeg,kv,atlas
 
 # ==========================================
-# Version
+# অ্যাপের version
 # ==========================================
 version = 16.2
 
 # ==========================================
-# Screen
+# স্ক্রিন সেটিং
 # ==========================================
 orientation = portrait
 fullscreen = 0
 
 # ==========================================
-# Python / Kivy Dependencies
+# Python এবং Kivy dependency
 # ==========================================
 requirements = python3,kivy,plyer
 
 # ==========================================
-# Android Permissions
+# Android Permission
 # ==========================================
 android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,POST_NOTIFICATIONS
 
@@ -54,30 +54,20 @@ android.minapi = 23
 android.archs = arm64-v8a,armeabi-v7a
 
 # ==========================================
-# Storage
+# Android storage
 # ==========================================
 android.private_storage = True
 android.allow_backup = False
 
 # ==========================================
-# Network Security
+# Network security
 # ==========================================
 android.uses_cleartext_connection = False
-
-# ==========================================
-# System Android SDK ব্যবহার
-# ==========================================
-android.sdk_path = /usr/local/lib/android/sdk
-
-# ==========================================
-# SDK License স্বয়ংক্রিয়ভাবে গ্রহণ
-# ==========================================
-android.accept_sdk_license = True
 
 
 [buildozer]
 
 # ==========================================
-# Build Log
+# Buildozer log level
 # ==========================================
 log_level = 2
