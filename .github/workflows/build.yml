@@ -124,16 +124,63 @@ jobs:
 
           echo "Build directory প্রস্তুত হয়েছে"
 
+            # ==========================================
+      # ৯. Android SDK প্রস্তুত করা
       # ==========================================
-      # ৯. Android SDK License প্রস্তুতি
-      # ==========================================
-      - name: Android SDK License প্রস্তুতি
+      - name: Android SDK প্রস্তুত করা
         run: |
           echo "=========================================="
-          echo "ANDROID SDK LICENSE"
+          echo "ANDROID SDK প্রস্তুত করা হচ্ছে"
           echo "=========================================="
 
           SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
+
+          echo "SDK_ROOT:"
+          echo "$SDK_ROOT"
+
+          mkdir -p "$SDK_ROOT"
+
+          echo
+          echo "System Android SDK খোঁজা হচ্ছে..."
+
+          if [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME" ]; then
+            SYSTEM_SDK="$ANDROID_HOME"
+          elif [ -n "${ANDROID_SDK_ROOT:-}" ] && [ -d "$ANDROID_SDK_ROOT" ]; then
+            SYSTEM_SDK="$ANDROID_SDK_ROOT"
+          elif [ -d "/usr/local/lib/android/sdk" ]; then
+            SYSTEM_SDK="/usr/local/lib/android/sdk"
+          else
+            echo "ERROR: System Android SDK পাওয়া যায়নি।"
+            exit 1
+          fi
+
+          echo "System SDK:"
+          echo "$SYSTEM_SDK"
+
+          echo
+          echo "sdkmanager খোঁজা হচ্ছে..."
+
+          SDKMANAGER="$(find "$SYSTEM_SDK" \
+            -type f \
+            -name "sdkmanager" \
+            -print -quit)"
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager পাওয়া যায়নি।"
+            find "$SYSTEM_SDK" \
+              -type f \
+              -name "*sdkmanager*" \
+              -print || true
+            exit 1
+          fi
+
+          echo "sdkmanager পাওয়া গেছে:"
+          echo "$SDKMANAGER"
+
+          chmod +x "$SDKMANAGER"
+
+          echo
+          echo "Android SDK license প্রস্তুত করা হচ্ছে..."
 
           mkdir -p "$SDK_ROOT/licenses"
 
@@ -142,13 +189,79 @@ jobs:
             "d56f5187479451eabf01fb78af6dfcb131a6481e" \
             > "$SDK_ROOT/licenses/android-sdk-license"
 
-          echo "Android SDK license প্রস্তুত হয়েছে।"
+          mkdir -p "$SYSTEM_SDK/licenses"
 
-          cat "$SDK_ROOT/licenses/android-sdk-license"
+          cp "$SDK_ROOT/licenses/android-sdk-license" \
+             "$SYSTEM_SDK/licenses/android-sdk-license"
+
+          echo
+          echo "Android SDK components ইনস্টল করা হচ্ছে..."
+
+          yes | "$SDKMANAGER" \
+            --sdk_root="$SYSTEM_SDK" \
+            --licenses || true
+
+          "$SDKMANAGER" \
+            --sdk_root="$SYSTEM_SDK" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "build-tools;37.0.0"
+
+          echo
+          echo "Build-Tools পরীক্ষা..."
+
+          find "$SYSTEM_SDK/build-tools" \
+            -maxdepth 2 \
+            -type f \
+            -name "aidl" \
+            -print || true
+
+          echo
+          echo "SDK প্রস্তুতি সম্পন্ন।"
 
 
       # ==========================================
-      # ১০. APK তৈরি
+      # ১০. Build Tools যাচাই
+      # ==========================================
+      - name: Build Tools যাচাই
+        run: |
+          echo "=========================================="
+          echo "BUILD TOOLS যাচাই"
+          echo "=========================================="
+
+          SYSTEM_SDK="/usr/local/lib/android/sdk"
+
+          echo
+          echo "Build Tools:"
+          ls -la "$SYSTEM_SDK/build-tools" || true
+
+          echo
+          echo "AIDL:"
+          find "$SYSTEM_SDK/build-tools" \
+            -type f \
+            -name "aidl" \
+            -print || true
+
+          if find "$SYSTEM_SDK/build-tools" \
+            -type f \
+            -name "aidl" \
+            | grep -q "aidl"; then
+
+            echo
+            echo "AIDL পাওয়া গেছে।"
+
+          else
+
+            echo
+            echo "ERROR: AIDL পাওয়া যায়নি।"
+            exit 1
+
+          fi
+
+
+      # ==========================================
+      # ১১. APK তৈরি
       # ==========================================
       - name: APK তৈরি
         run: |
@@ -160,7 +273,7 @@ jobs:
 
 
       # ==========================================
-      # ১১. APK পরীক্ষা
+      # ১২. APK পরীক্ষা
       # ==========================================
       - name: APK পরীক্ষা
         if: always()
@@ -169,19 +282,40 @@ jobs:
           echo "GENERATED APK"
           echo "=========================================="
 
-          if [ -d "bin" ] && find bin -maxdepth 1 -type f -name "*.apk" | grep -q ".apk"; then
+          if [ -d "bin" ] && \
+             find bin \
+             -maxdepth 1 \
+             -type f \
+             -name "*.apk" \
+             | grep -q ".apk"; then
+
             echo "APK সফলভাবে তৈরি হয়েছে।"
-            find bin -maxdepth 1 -type f -name "*.apk" -exec ls -lh {} \;
+
+            find bin \
+              -maxdepth 1 \
+              -type f \
+              -name "*.apk" \
+              -exec ls -lh {} \;
+
           else
+
             echo "ERROR: APK তৈরি হয়নি."
+
+            echo
             echo "APK খোঁজা হচ্ছে..."
-            find . -type f \( -name "*.apk" -o -name "*.aab" \) -print || true
+
+            find . \
+              -type f \
+              \( -name "*.apk" -o -name "*.aab" \) \
+              -print || true
+
             exit 1
+
           fi
 
 
       # ==========================================
-      # ১২. APK Upload
+      # ১৩. APK Upload
       # ==========================================
       - name: APK Upload
         if: success()
