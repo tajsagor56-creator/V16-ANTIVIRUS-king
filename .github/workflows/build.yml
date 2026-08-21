@@ -21,7 +21,7 @@ jobs:
       # ==========================================
       # ২. Python সেটআপ
       # ==========================================
-      - name: Python Setup
+      - name: Python সেটআপ
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
@@ -29,16 +29,17 @@ jobs:
       # ==========================================
       # ৩. Java সেটআপ
       # ==========================================
-      - name: Java Setup
+      - name: Java সেটআপ
         uses: actions/setup-java@v5
         with:
           distribution: "temurin"
           java-version: "17"
 
       # ==========================================
-      # ৪. Linux Package ইনস্টল
+      # ৪. প্রয়োজনীয় Linux Package
       # ==========================================
       - name: Linux Package ইনস্টল
+        shell: bash
         run: |
           set -e
 
@@ -58,9 +59,10 @@ jobs:
             cmake
 
       # ==========================================
-      # ৫. Python Build Package ইনস্টল
+      # ৫. Buildozer ইনস্টল
       # ==========================================
       - name: Buildozer ইনস্টল
+        shell: bash
         run: |
           set -e
 
@@ -74,11 +76,12 @@ jobs:
       # ৬. Project পরীক্ষা
       # ==========================================
       - name: Project পরীক্ষা
+        shell: bash
         run: |
           set -e
 
           echo "=========================================="
-          echo "V16 ANTIVIRUS"
+          echo "V16 ANTIVIRUS PROJECT"
           echo "=========================================="
 
           echo
@@ -98,9 +101,10 @@ jobs:
           ls -la
 
       # ==========================================
-      # ৭. main.py Syntax পরীক্ষা
+      # ৭. Python Syntax পরীক্ষা
       # ==========================================
       - name: Python Syntax পরীক্ষা
+        shell: bash
         run: |
           set -e
 
@@ -110,39 +114,18 @@ jobs:
           echo "main.py syntax ঠিক আছে।"
 
       # ==========================================
-      # ৮. পুরোনো Build Cache পরিষ্কার
+      # ৮. System Android SDK নির্ধারণ
       # ==========================================
-      - name: Build Cache পরিষ্কার
-        run: |
-          set -e
-
-          echo "=========================================="
-          echo "BUILD CACHE CLEAN"
-          echo "=========================================="
-
-          rm -rf .buildozer
-          rm -rf bin
-
-          mkdir -p bin
-
-          echo "পুরোনো Build cache পরিষ্কার হয়েছে।"
-
-      # ==========================================
-      # ৯. System Android SDK নির্ধারণ
-      # ==========================================
-      - name: System Android SDK সেটআপ
+      - name: Android SDK প্রস্তুতি
         shell: bash
         run: |
           set -e
 
           echo "=========================================="
-          echo "ANDROID SDK SETUP"
+          echo "ANDROID SDK PREPARATION"
           echo "=========================================="
 
           SDK_ROOT="/usr/local/lib/android/sdk"
-
-          echo "SDK ROOT:"
-          echo "$SDK_ROOT"
 
           if [ ! -d "$SDK_ROOT" ]; then
             echo "ERROR: Android SDK পাওয়া যায়নি।"
@@ -151,11 +134,8 @@ jobs:
 
           SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
 
-          if [ ! -f "$SDKMANAGER" ]; then
+          if [ ! -x "$SDKMANAGER" ]; then
             echo "ERROR: sdkmanager পাওয়া যায়নি।"
-
-            echo
-            echo "sdkmanager খোঁজা হচ্ছে..."
 
             find "$SDK_ROOT" \
               -type f \
@@ -165,15 +145,18 @@ jobs:
             exit 1
           fi
 
+          echo "System SDK:"
+          echo "$SDK_ROOT"
+
           echo
-          echo "sdkmanager পাওয়া গেছে:"
+          echo "sdkmanager:"
           echo "$SDKMANAGER"
 
           echo
           echo "sdkmanager version:"
           "$SDKMANAGER" --version
 
-          # GitHub Actions-এর পরবর্তী step-গুলোর জন্য SDK path স্থায়ী করা
+          # পরবর্তী GitHub Actions step-এ SDK path ব্যবহার হবে
           echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROIDSDK=$SDK_ROOT" >> "$GITHUB_ENV"
@@ -181,13 +164,35 @@ jobs:
           echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
           echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
 
-          echo
-          echo "Android SDK environment প্রস্তুত হয়েছে।"
+      # ==========================================
+      # ৯. Android SDK License প্রস্তুতি
+      # ==========================================
+      - name: Android SDK License প্রস্তুতি
+        shell: bash
+        run: |
+          set -e
+
+          echo "=========================================="
+          echo "ANDROID SDK LICENSE"
+          echo "=========================================="
+
+          SDK_ROOT="/usr/local/lib/android/sdk"
+
+          mkdir -p "$SDK_ROOT/licenses"
+
+          printf '%s\n' \
+            "24333f8a63b6825ea9c5514f83c2829b004d1fee" \
+            "d56f5187479451eabf01fb78af6dfcb131a6481e" \
+            > "$SDK_ROOT/licenses/android-sdk-license"
+
+          echo "License file প্রস্তুত হয়েছে।"
+
+          cat "$SDK_ROOT/licenses/android-sdk-license"
 
       # ==========================================
-      # ১০. Android SDK Components প্রস্তুত
+      # ১০. Android SDK Components ইনস্টল
       # ==========================================
-      - name: Android SDK Components প্রস্তুত
+      - name: Android SDK Components ইনস্টল
         shell: bash
         run: |
           set -e
@@ -199,40 +204,71 @@ jobs:
           SDK_ROOT="/usr/local/lib/android/sdk"
           SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
 
-          echo "SDK:"
-          echo "$SDK_ROOT"
+          echo
+          echo "SDK License গ্রহণ করা হচ্ছে..."
+
+          yes | "$SDKMANAGER" --licenses || true
 
           echo
-          echo "License গ্রহণ করা হচ্ছে..."
-
-          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-
-          echo
-          echo "Android API 35 এবং Build-Tools ইনস্টল করা হচ্ছে..."
+          echo "Required Android Components ইনস্টল হচ্ছে..."
 
           "$SDKMANAGER" \
             "platform-tools" \
             "platforms;android-35" \
-            "build-tools;35.0.0"
+            "build-tools;37.0.0"
 
           echo
-          echo "Installed Build-Tools:"
+          echo "Build-Tools:"
           ls -la "$SDK_ROOT/build-tools"
 
           echo
-          echo "Installed Platforms:"
+          echo "Platforms:"
           ls -la "$SDK_ROOT/platforms"
 
+          echo
+          echo "AIDL পরীক্ষা..."
+
+          AIDL="$SDK_ROOT/build-tools/37.0.0/aidl"
+
+          if [ ! -f "$AIDL" ]; then
+            echo "ERROR: Build-Tools 37.0.0-এর AIDL পাওয়া যায়নি।"
+            exit 1
+          fi
+
+          echo "AIDL পাওয়া গেছে:"
+          echo "$AIDL"
+
+          "$AIDL" --version || true
+
       # ==========================================
-      # ১১. Buildozer-কে System SDK ব্যবহার করতে বাধ্য করা
+      # ১১. Buildozer Cache পরিষ্কার
       # ==========================================
-      - name: Buildozer SDK Environment
+      - name: Buildozer Cache পরিষ্কার
         shell: bash
         run: |
           set -e
 
           echo "=========================================="
-          echo "BUILDOZER SDK ENVIRONMENT"
+          echo "BUILDOZER CACHE CLEAN"
+          echo "=========================================="
+
+          rm -rf .buildozer
+          rm -rf bin
+
+          mkdir -p bin
+
+          echo "পুরোনো Build cache পরিষ্কার হয়েছে।"
+
+      # ==========================================
+      # ১২. Buildozer Environment নিশ্চিত করা
+      # ==========================================
+      - name: Buildozer Environment
+        shell: bash
+        run: |
+          set -e
+
+          echo "=========================================="
+          echo "BUILDOZER ENVIRONMENT"
           echo "=========================================="
 
           SDK_ROOT="/usr/local/lib/android/sdk"
@@ -252,10 +288,6 @@ jobs:
           command -v sdkmanager
 
           echo
-          echo "sdkmanager version:"
-          sdkmanager --version
-
-          echo
           echo "AIDL:"
           find "$SDK_ROOT/build-tools" \
             -type f \
@@ -263,10 +295,27 @@ jobs:
             -print
 
           echo
-          echo "System SDK প্রস্তুত।"
+          echo "Build-Tools:"
+          ls -la "$SDK_ROOT/build-tools"
 
       # ==========================================
-      # ১২. APK Build
+      # ১৩. Buildozer Configuration পরীক্ষা
+      # ==========================================
+      - name: Buildozer Configuration পরীক্ষা
+        shell: bash
+        run: |
+          set -e
+
+          echo "=========================================="
+          echo "BUILDOZER CONFIGURATION"
+          echo "=========================================="
+
+          grep -E \
+            "android.sdk_path|android.api|android.minapi|android.archs|requirements" \
+            buildozer.spec || true
+
+      # ==========================================
+      # ১৪. APK তৈরি
       # ==========================================
       - name: APK তৈরি
         shell: bash
@@ -286,7 +335,7 @@ jobs:
           export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$SDK_ROOT/platform-tools:$PATH"
 
           echo
-          echo "Final SDK:"
+          echo "Final Android SDK:"
           echo "$ANDROID_HOME"
 
           echo
@@ -294,12 +343,23 @@ jobs:
           command -v sdkmanager
 
           echo
+          echo "Build-Tools:"
+          ls -la "$SDK_ROOT/build-tools"
+
+          echo
+          echo "AIDL:"
+          find "$SDK_ROOT/build-tools" \
+            -type f \
+            -name aidl \
+            -print
+
+          echo
           echo "Buildozer শুরু হচ্ছে..."
 
           buildozer -v android debug
 
       # ==========================================
-      # ১৩. APK পরীক্ষা
+      # ১৫. APK পরীক্ষা
       # ==========================================
       - name: APK পরীক্ষা
         if: always()
@@ -339,7 +399,7 @@ jobs:
           fi
 
       # ==========================================
-      # ১৪. APK Artifact Upload
+      # ১৬. APK Artifact Upload
       # ==========================================
       - name: APK Upload
         if: success()
