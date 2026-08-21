@@ -389,75 +389,35 @@ jobs:
           echo "Buildozer configuration detected."
 
       # =====================================================
-      # 13. Prepare SDK for Buildozer
+      # 13. Prepare Buildozer Android Platform
       # =====================================================
-      - name: Prepare Android SDK for Buildozer
+      - name: Prepare Buildozer Android Platform
         shell: bash
         run: |
           set -euxo pipefail
 
+          echo "=========================================="
+          echo "PREPARING BUILDOZER ANDROID PLATFORM"
+          echo "=========================================="
+
           SDK="/usr/local/lib/android/sdk"
           NDK="$SDK/ndk/27.3.13750724"
 
-          echo "=========================================="
-          echo "PREPARING ANDROID SDK"
-          echo "=========================================="
+          BUILD_PLATFORM="$HOME/.buildozer/android/platform"
 
           test -d "$SDK"
           test -d "$NDK"
 
-          echo
-          echo "SDK:"
+          echo "System SDK:"
           echo "$SDK"
 
-          echo
-          echo "NDK:"
+          echo "System NDK:"
           echo "$NDK"
 
-          # -------------------------------------------------
-          # Find sdkmanager
-          # -------------------------------------------------
-          SDKMANAGER=""
-
-          for candidate in \
-            "$SDK/cmdline-tools/latest/bin/sdkmanager" \
-            "$SDK/cmdline-tools/*/bin/sdkmanager" \
-            "$SDK/tools/bin/sdkmanager"
-          do
-            for file in $candidate; do
-              if [ -x "$file" ]; then
-                SDKMANAGER="$file"
-                break 2
-              fi
-            done
-          done
-
-          if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager পাওয়া যায়নি।"
-            find "$SDK" -type f -name sdkmanager -print || true
-            exit 1
-          fi
-
-          echo
-          echo "Found sdkmanager:"
-          echo "$SDKMANAGER"
+          mkdir -p "$BUILD_PLATFORM"
 
           # -------------------------------------------------
-          # Buildozer 1.5 compatibility path
-          # -------------------------------------------------
-          mkdir -p "$SDK/tools/bin"
-
-          ln -sf "$SDKMANAGER" \
-            "$SDK/tools/bin/sdkmanager"
-
-          test -x "$SDK/tools/bin/sdkmanager"
-
-          echo
-          echo "Compatibility sdkmanager:"
-          "$SDK/tools/bin/sdkmanager" --version
-
-          # -------------------------------------------------
-          # Android environment
+          # Tell Buildozer which Android SDK to use
           # -------------------------------------------------
           echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
@@ -466,39 +426,90 @@ jobs:
           echo "ANDROID_NDK_ROOT=$NDK" >> "$GITHUB_ENV"
           echo "ANDROID_NDK=$NDK" >> "$GITHUB_ENV"
 
+          # -------------------------------------------------
+          # PATH
+          # -------------------------------------------------
           echo "$SDK/platform-tools" >> "$GITHUB_PATH"
-          echo "$SDK/tools/bin" >> "$GITHUB_PATH"
           echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$SDK/build-tools/35.0.0" >> "$GITHUB_PATH"
+
+          # -------------------------------------------------
+          # Find sdkmanager
+          # -------------------------------------------------
+          SDKMANAGER=""
+
+          if [ -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+              SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          else
+              SDKMANAGER=$(find "$SDK/cmdline-tools" \
+                -type f \
+                -name sdkmanager \
+                -perm -111 \
+                | head -n 1 || true)
+          fi
+
+          if [ -z "$SDKMANAGER" ]; then
+              echo "ERROR: sdkmanager not found"
+              find "$SDK" -type f -name sdkmanager -print || true
+              exit 1
+          fi
 
           echo
-          echo "Android SDK preparation complete."
+          echo "sdkmanager found:"
+          echo "$SDKMANAGER"
+
+          # -------------------------------------------------
+          # Buildozer 1.5 compatibility
+          # -------------------------------------------------
+          mkdir -p "$SDK/tools/bin"
+
+          ln -sf "$SDKMANAGER" "$SDK/tools/bin/sdkmanager"
+
+          echo "$SDK/tools/bin" >> "$GITHUB_PATH"
+
+          echo
+          echo "sdkmanager version:"
+          "$SDK/tools/bin/sdkmanager" --version
 
 
       # =====================================================
-      # 14. Verify SDK / NDK
+      # 14. Verify Android Installation
       # =====================================================
-      - name: Verify SDK and NDK
+      - name: Verify Android Installation
         shell: bash
         run: |
           set -euxo pipefail
 
-          SDK="$ANDROID_HOME"
-          NDK="$ANDROID_NDK_HOME"
+          SDK="/usr/local/lib/android/sdk"
+          NDK="$SDK/ndk/27.3.13750724"
 
           echo "=========================================="
-          echo "VERIFY SDK / NDK"
+          echo "VERIFY ANDROID INSTALLATION"
           echo "=========================================="
 
           echo
-          echo "ANDROID_HOME:"
-          echo "$SDK"
-
-          echo
-          echo "ANDROID_NDK_HOME:"
-          echo "$NDK"
-
+          echo "SDK:"
           test -d "$SDK"
+
+          echo
+          echo "NDK:"
           test -d "$NDK"
+
+          echo
+          echo "NDK version:"
+          "$NDK/ndk-build" --version | head -n 5
+
+          echo
+          echo "Platform:"
+          test -d "$SDK/platforms/android-35"
+
+          echo
+          echo "Build Tools:"
+          test -d "$SDK/build-tools/35.0.0"
+
+          echo
+          echo "AIDL:"
+          test -x "$SDK/build-tools/35.0.0/aidl"
 
           echo
           echo "sdkmanager:"
@@ -506,40 +517,31 @@ jobs:
           sdkmanager --version
 
           echo
-          echo "AIDL:"
-          command -v aidl || true
-          aidl --version || true
-
-          echo
-          echo "NDK:"
-          "$NDK/ndk-build" --version | head -n 5
-
-          echo
-          echo "SDK/NDK verification successful."
+          echo "Android installation OK."
 
 
       # =====================================================
-      # 15. Clean Buildozer Android Download Cache
+      # 15. Configure Buildozer Spec
       # =====================================================
-      - name: Prepare Buildozer Cache
+      - name: Configure Buildozer Spec
         shell: bash
         run: |
           set -euxo pipefail
 
           echo "=========================================="
-          echo "PREPARING BUILDOZER"
+          echo "BUILDOZER SPEC"
           echo "=========================================="
 
-          mkdir -p "$HOME/.buildozer/android/platform"
-
-          # Remove only Buildozer's automatically downloaded
-          # SDK/NDK copies if they exist.
-          rm -rf "$HOME/.buildozer/android/platform/android-sdk" || true
-          rm -rf "$HOME/.buildozer/android/platform/android-ndk-r27.3.13750724" || true
+          test -f buildozer.spec
 
           echo
-          echo "Buildozer directory:"
-          ls -la "$HOME/.buildozer/android/platform" || true
+          echo "Android configuration:"
+          grep -E \
+            '^(android.api|android.minapi|android.ndk|android.arch|requirements)' \
+            buildozer.spec || true
+
+          echo
+          echo "Buildozer spec exists."
 
 
       # =====================================================
@@ -551,7 +553,7 @@ jobs:
           set -euxo pipefail
 
           echo "=========================================="
-          echo "BUILDING V16 ANTIVIRUS"
+          echo "STARTING APK BUILD"
           echo "=========================================="
 
           python --version
@@ -562,11 +564,16 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
 
           echo
-          echo "sdkmanager:"
-          sdkmanager --version
+          echo "SDK:"
+          ls -ld "$ANDROID_HOME"
 
           echo
-          echo "STARTING APK BUILD"
+          echo "NDK:"
+          ls -ld "$ANDROID_NDK_HOME"
+
+          echo
+          echo "=========================================="
+          echo "BUILDOZER BUILD"
           echo "=========================================="
 
           python -m buildozer -v android debug
@@ -582,7 +589,7 @@ jobs:
           set +e
 
           echo "=========================================="
-          echo "SEARCHING APK"
+          echo "APK FILES"
           echo "=========================================="
 
           find . \
@@ -591,7 +598,7 @@ jobs:
             -print
 
           echo
-          echo "BIN DIRECTORY:"
+          echo "BIN:"
           ls -lah bin/ 2>/dev/null || true
 
 
