@@ -15,14 +15,14 @@ fullscreen = 0
 requirements = python3,kivy,plyer
 
 android.api = 35
-android.minapi = 24
+android.minapi = 23
 
 android.ndk = 27.3.13750724
+android.ndk_path = /usr/local/lib/android/sdk/ndk/27.3.13750724
 
-android.archs = arm64-v8a
+android.sdk_path = /usr/local/lib/android/sdk
 
-android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,POST_NOTIFICATIONS
+android.ndk_api = 23
 
-android.private_storage = True
-android.allow_backup = False
-android.uses_cleartext_connection = False
+android.skip_update = True
+android.accept_sdk_license = True
