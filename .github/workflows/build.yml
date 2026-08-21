@@ -91,7 +91,7 @@ jobs:
       # =========================================================
       # 05. Install Buildozer dependencies
       # =========================================================
-      - name: Install Build dependencies
+      - name: Install Buildozer
         shell: bash
         run: |
           set -eux
@@ -104,7 +104,21 @@ jobs:
             virtualenv
 
           echo
-          echo "Buildozer:"
+          echo "=========================================="
+          echo "BUILDOZER CHECK"
+          echo "=========================================="
+
+          python -m pip show buildozer
+
+          python -m buildozer --version
+
+          BUILD_USER_BIN="$(python -m site --user-base)/bin"
+
+          echo "$BUILD_USER_BIN" >> "$GITHUB_PATH"
+
+          export PATH="$BUILD_USER_BIN:$PATH"
+
+          command -v buildozer
           buildozer --version
 
           echo
