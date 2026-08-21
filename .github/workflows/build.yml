@@ -4,53 +4,45 @@ on:
   push:
     branches:
       - main
-
   workflow_dispatch:
 
 jobs:
-
   build:
-
     runs-on: ubuntu-22.04
 
     steps:
 
-      # ==========================================
-      # 1. Checkout Repository
-      # ==========================================
-
+      # ==================================================
+      # 01. CHECKOUT
+      # ==================================================
       - name: Checkout Repository
         uses: actions/checkout@v4
 
 
-      # ==========================================
-      # 2. Setup Python
-      # ==========================================
-
+      # ==================================================
+      # 02. PYTHON
+      # ==================================================
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.11.16"
 
 
-      # ==========================================
-      # 3. Setup Java 17
-      # ==========================================
-
+      # ==================================================
+      # 03. JAVA 17
+      # ==================================================
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: "temurin"
+          distribution: temurin
           java-version: "17"
 
 
-      # ==========================================
-      # 4. Install System Packages
-      # ==========================================
-
+      # ==================================================
+      # 04. SYSTEM PACKAGES
+      # ==================================================
       - name: Install System Packages
         run: |
-
           sudo apt-get update
 
           sudo apt-get install -y \
@@ -69,13 +61,11 @@ jobs:
             cmake
 
 
-      # ==========================================
-      # 5. Install Buildozer
-      # ==========================================
-
-      - name: Install Buildozer
+      # ==================================================
+      # 05. PYTHON BUILD TOOLS
+      # ==================================================
+      - name: Install Python Build Tools
         run: |
-
           python -m pip install --upgrade pip
 
           python -m pip install \
@@ -84,178 +74,126 @@ jobs:
             virtualenv
 
 
-      # ==========================================
-      # 6. Check Environment
-      # ==========================================
-
-      - name: Check Environment
+      # ==================================================
+      # 06. PROJECT CHECK
+      # ==================================================
+      - name: Check Project
         run: |
-
           echo "=============================="
-          echo "PROJECT FILES"
+          echo "PROJECT"
           echo "=============================="
 
+          pwd
           ls -la
 
           echo
-          echo "=============================="
-          echo "PYTHON"
-          echo "=============================="
-
+          echo "Python:"
           python --version
 
           echo
-          echo "=============================="
-          echo "JAVA"
-          echo "=============================="
-
+          echo "Java:"
           java -version
 
           echo
-          echo "=============================="
-          echo "BUILDOZER"
-          echo "=============================="
-
+          echo "Buildozer:"
           buildozer --version
 
 
-      # ==========================================
-      # 7. Validate main.py
-      # ==========================================
-
+      # ==================================================
+      # 07. PYTHON SYNTAX TEST
+      # ==================================================
       - name: Validate Python
         run: |
-
-          echo "Checking main.py..."
+          echo "=============================="
+          echo "PYTHON SYNTAX TEST"
+          echo "=============================="
 
           python -m py_compile main.py
 
-          echo
-          echo "=============================="
           echo "main.py syntax OK"
-          echo "=============================="
 
 
-      # ==========================================
-      # 8. Clean Previous Build
-      # ==========================================
-
+      # ==================================================
+      # 08. CLEAN OLD BUILD
+      # ==================================================
       - name: Clean Build
         run: |
-
           rm -rf .buildozer
           rm -rf bin
 
           mkdir -p bin
 
 
-      # ==========================================
-      # 9. Prepare Android SDK
-      # ==========================================
-
+      # ==================================================
+      # 09. PREPARE ANDROID SDK
+      # ==================================================
       - name: Prepare Android SDK
         shell: bash
         run: |
-
           set -e
 
           echo "=============================="
           echo "ANDROID SDK PREPARATION"
           echo "=============================="
 
-
-          # ------------------------------------------
-          # SDK location
-          # ------------------------------------------
-
           SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
-
-          echo "SDK_ROOT:"
-          echo "$SDK_ROOT"
-
-
-          # ------------------------------------------
-          # Create SDK directory
-          # ------------------------------------------
 
           mkdir -p "$SDK_ROOT"
 
+          echo "SDK ROOT:"
+          echo "$SDK_ROOT"
 
-          # ------------------------------------------
+
+          # ------------------------------------------------
           # Download Android Command Line Tools
-          # ------------------------------------------
+          # ------------------------------------------------
 
-          CMDLINE_URL="https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip"
+          CMDLINE_DIR="$HOME/android-cmdline-tools"
+
+          rm -rf "$CMDLINE_DIR"
+
+          mkdir -p "$CMDLINE_DIR"
 
           echo
-          echo "Downloading Android Command Line Tools..."
+          echo "Downloading Android command line tools..."
 
           curl -L \
-            "$CMDLINE_URL" \
-            -o "$HOME/cmdline-tools.zip"
+            -o "$HOME/cmdline-tools.zip" \
+            "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
 
 
-          # ------------------------------------------
-          # Extract tools
-          # ------------------------------------------
-
-          rm -rf "$HOME/android-cmdline-tools"
-
-          mkdir -p "$HOME/android-cmdline-tools"
+          # ------------------------------------------------
+          # Extract
+          # ------------------------------------------------
 
           unzip -q \
             "$HOME/cmdline-tools.zip" \
-            -d "$HOME/android-cmdline-tools"
+            -d "$CMDLINE_DIR"
 
 
-          # ------------------------------------------
-          # Install cmdline-tools
-          # ------------------------------------------
+          # ------------------------------------------------
+          # Create correct SDK structure
+          # ------------------------------------------------
 
           mkdir -p "$SDK_ROOT/cmdline-tools"
 
           rm -rf "$SDK_ROOT/cmdline-tools/latest"
 
+          mkdir -p "$SDK_ROOT/cmdline-tools/latest"
 
-          if [ -d "$HOME/android-cmdline-tools/cmdline-tools" ]; then
-
-            mv \
-              "$HOME/android-cmdline-tools/cmdline-tools" \
-              "$SDK_ROOT/cmdline-tools/latest"
-
-          else
-
-            echo "ERROR: cmdline-tools directory not found."
-
-            find "$HOME/android-cmdline-tools" \
-              -maxdepth 4 \
-              -type f \
-              -name "sdkmanager" \
-              -print
-
-            exit 1
-
-          fi
+          cp -r \
+            "$CMDLINE_DIR/cmdline-tools/"* \
+            "$SDK_ROOT/cmdline-tools/latest/"
 
 
-          # ------------------------------------------
-          # sdkmanager
-          # ------------------------------------------
+          # ------------------------------------------------
+          # SDKMANAGER
+          # ------------------------------------------------
 
           SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
 
-          echo
-          echo "SDKMANAGER:"
-          echo "$SDKMANAGER"
-
-
           if [ ! -f "$SDKMANAGER" ]; then
-
-            echo
-            echo "ERROR: sdkmanager not found."
-
-            echo
-            echo "Searching..."
+            echo "ERROR: sdkmanager not found"
 
             find "$SDK_ROOT" \
               -type f \
@@ -263,95 +201,71 @@ jobs:
               -print
 
             exit 1
-
           fi
-
 
           chmod +x "$SDKMANAGER"
 
-
           echo
-          echo "sdkmanager found successfully."
+          echo "sdkmanager:"
+          "$SDKMANAGER" --version
 
 
-          # ------------------------------------------
-          # Android SDK Licenses
-          # ------------------------------------------
+          # ------------------------------------------------
+          # Android licenses
+          # ------------------------------------------------
 
           mkdir -p "$SDK_ROOT/licenses"
 
-
-          printf '%s\n' \
-            "24333f8a63b6825ea9c5514f83c2829b004d1fee" \
-            "d56f5187479451eabf01fb78af6dfcb131a6481e" \
-            > "$SDK_ROOT/licenses/android-sdk-license"
-
-
-          echo
-          echo "Android SDK licenses prepared."
+          cat > "$SDK_ROOT/licenses/android-sdk-license" << 'EOF'
+24333f8a63b6825ea9c5514f83c2829b004d1fee
+d56f5187479451eabf01fb78af6dfcb131a6481e
+EOF
 
 
-          # ------------------------------------------
+          # ------------------------------------------------
+          # Environment
+          # ------------------------------------------------
+
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+
+
+          # ------------------------------------------------
           # Accept licenses
-          # ------------------------------------------
-
-          echo
-          echo "Accepting Android SDK licenses..."
-
+          # ------------------------------------------------
 
           yes | "$SDKMANAGER" \
             --sdk_root="$SDK_ROOT" \
             --licenses || true
 
 
-          # ------------------------------------------
-          # Install SDK packages
-          # ------------------------------------------
+          # ------------------------------------------------
+          # Install required SDK components
+          # ------------------------------------------------
 
           echo
           echo "Installing Android SDK components..."
-
 
           "$SDKMANAGER" \
             --sdk_root="$SDK_ROOT" \
             "platform-tools" \
             "platforms;android-35" \
-            "build-tools;35.0.0" \
-            "build-tools;36.0.0" \
-            "build-tools;37.0.0"
+            "build-tools;35.0.0"
 
 
-          # ------------------------------------------
-          # Check Build Tools
-          # ------------------------------------------
+          # ------------------------------------------------
+          # Verify Build Tools
+          # ------------------------------------------------
 
           echo
           echo "=============================="
           echo "BUILD TOOLS"
           echo "=============================="
 
-
-          if [ ! -d "$SDK_ROOT/build-tools" ]; then
-
-            echo "ERROR: build-tools directory not found."
-
-            exit 1
-
-          fi
-
-
-          ls -la "$SDK_ROOT/build-tools"
-
-
-          # ------------------------------------------
-          # Find AIDL
-          # ------------------------------------------
-
-          echo
-          echo "=============================="
-          echo "CHECKING AIDL"
-          echo "=============================="
-
+          ls -la "$SDK_ROOT/build-tools" || true
 
           find "$SDK_ROOT/build-tools" \
             -type f \
@@ -359,115 +273,149 @@ jobs:
             -print
 
 
-          AIDL_PATH="$(find "$SDK_ROOT/build-tools" \
-            -type f \
-            -name "aidl" \
-            | sort -V \
-            | tail -n 1)"
+          # ------------------------------------------------
+          # Verify AIDL
+          # ------------------------------------------------
 
+          AIDL="$SDK_ROOT/build-tools/35.0.0/aidl"
 
-          if [ -z "$AIDL_PATH" ]; then
-
+          if [ ! -f "$AIDL" ]; then
             echo
-            echo "ERROR: AIDL NOT FOUND."
+            echo "ERROR: AIDL NOT FOUND"
+
+            find "$SDK_ROOT/build-tools" \
+              -type f \
+              -name "aidl" \
+              -print
 
             exit 1
-
           fi
 
-
-          chmod +x "$AIDL_PATH"
-
+          chmod +x "$AIDL"
 
           echo
           echo "AIDL FOUND:"
-          echo "$AIDL_PATH"
+          "$AIDL" --version || true
 
 
-          # ------------------------------------------
-          # Export Android variables
-          # ------------------------------------------
+          # ------------------------------------------------
+          # Export SDK paths for Buildozer
+          # ------------------------------------------------
 
           echo "ANDROIDSDK=$SDK_ROOT" >> "$GITHUB_ENV"
 
-          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
-
-          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
-
-
-          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
-
-          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "ANDROIDAPI=35" >> "$GITHUB_ENV"
+          echo "ANDROIDMINAPI=23" >> "$GITHUB_ENV"
 
 
           echo
-          echo "=============================="
           echo "ANDROID SDK READY"
+
+
+      # ==================================================
+      # 10. VERIFY SDK
+      # ==================================================
+      - name: Verify Android SDK
+        shell: bash
+        run: |
+          set -e
+
+          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
+
+          echo "=============================="
+          echo "SDK VERIFICATION"
           echo "=============================="
 
+          echo
+          echo "SDK:"
+          echo "$SDK_ROOT"
 
-      # ==========================================
-      # 10. Build APK
-      # ==========================================
+          echo
+          echo "SDKMANAGER:"
+          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --version
 
+          echo
+          echo "Platforms:"
+          ls -la "$SDK_ROOT/platforms"
+
+          echo
+          echo "Build Tools:"
+          ls -la "$SDK_ROOT/build-tools"
+
+          echo
+          echo "AIDL:"
+          ls -l "$SDK_ROOT/build-tools/35.0.0/aidl"
+
+
+      # ==================================================
+      # 11. BUILD APK
+      # ==================================================
       - name: Build APK
         shell: bash
         run: |
-
           set -e
 
           echo "=============================="
           echo "BUILDING V16 ANTIVIRUS APK"
           echo "=============================="
 
+          buildozer android clean || true
 
           buildozer -v android debug
 
 
-      # ==========================================
-      # 11. Check APK
-      # ==========================================
-
+      # ==================================================
+      # 12. CHECK APK
+      # ==================================================
       - name: Check Generated APK
         if: always()
         shell: bash
         run: |
-
           echo
           echo "=============================="
           echo "GENERATED APK"
           echo "=============================="
 
-
-          if ls bin/*.apk >/dev/null 2>&1; then
+          if find bin \
+            -maxdepth 1 \
+            -type f \
+            -name "*.apk" \
+            | grep -q ".apk"; then
 
             echo
             echo "APK FOUND:"
-
             ls -lh bin/*.apk
 
           else
 
             echo
-            echo "ERROR: APK WAS NOT GENERATED."
+            echo "ERROR: APK WAS NOT GENERATED"
 
             echo
-            echo "Searching for APK files..."
+            echo "Searching entire project..."
 
             find . \
               -type f \
               \( -name "*.apk" -o -name "*.aab" \) \
               -print
 
+            echo
+            echo "Last Buildozer files:"
+
+            find .buildozer \
+              -type f \
+              -name "*.log" \
+              -print \
+              | tail -20 || true
+
             exit 1
 
           fi
 
 
-      # ==========================================
-      # 12. Upload APK
-      # ==========================================
-
+      # ==================================================
+      # 13. UPLOAD APK
+      # ==================================================
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
@@ -477,10 +425,9 @@ jobs:
           if-no-files-found: error
 
 
-      # ==========================================
-      # 13. Upload Build Logs
-      # ==========================================
-
+      # ==================================================
+      # 14. UPLOAD BUILD LOG
+      # ==================================================
       - name: Upload Build Logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -488,5 +435,5 @@ jobs:
           name: V16-build-log
           path: |
             .buildozer/**/*.log
-            .buildozer/**/*.txt
+            .buildozer/**/build.log
           if-no-files-found: ignore
