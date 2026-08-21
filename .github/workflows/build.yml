@@ -11,244 +11,177 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+
+      # ==========================================
+      # ১. Repository Checkout
+      # ==========================================
       - name: Repository Checkout
         uses: actions/checkout@v5
 
+
+      # ==========================================
+      # ২. Python Setup
+      # ==========================================
       - name: Python Setup
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
+
+      # ==========================================
+      # ৩. Java Setup
+      # ==========================================
       - name: Java Setup
         uses: actions/setup-java@v5
         with:
-          distribution: temurin
+          distribution: "temurin"
           java-version: "17"
 
-      - name: Project Check
-        run: |
-          echo "================================"
-          echo "V16 ANTIVIRUS"
-          echo "================================"
-          python --version
-          java -version
-          ls -la
 
-      - name: Python Syntax Check
+      # ==========================================
+      # ৪. Linux Package
+      # ==========================================
+      - name: Linux Package ইনস্টল
         run: |
-          python -m py_compile main.py
-          echo "main.py syntax ঠিক আছে"
+          sudo apt-get update
 
-      - name: Buildozer Install
+          sudo apt-get install -y \
+            git \
+            zip \
+            unzip \
+            autoconf \
+            automake \
+            libtool \
+            pkg-config \
+            zlib1g-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
+            cmake
+
+
+      # ==========================================
+      # ৫. Python Build Package
+      # ==========================================
+      - name: Buildozer ইনস্টল
         run: |
           python -m pip install --upgrade pip
-          python -m pip install buildozer==1.6.0
-          python -m pip install cython==0.29.37
 
-      - name: Buildozer Version
-        run: |
-          buildozer --version
-                # ==========================================
-      # ৮. Android SDK প্রস্তুতি
+          python -m pip install \
+            buildozer==1.6.0 \
+            cython==0.29.37
+
+
       # ==========================================
-      - name: Android SDK প্রস্তুতি
+      # ৬. Project Check
+      # ==========================================
+      - name: Project পরীক্ষা
         run: |
           echo "=========================================="
-          echo "ANDROID SDK PREPARATION"
+          echo "V16 ANTIVIRUS"
           echo "=========================================="
 
-          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
-
-          echo "SDK ROOT:"
-          echo "$SDK_ROOT"
-
-          mkdir -p "$SDK_ROOT"
-
-
-          # ==========================================
-          # Android Command Line Tools ডাউনলোড
-          # ==========================================
           echo
-          echo "Android Command Line Tools ডাউনলোড হচ্ছে..."
-
-          mkdir -p "$HOME/android-cmdline-tools"
-
-          curl -L \
-            -o "$HOME/android-cmdline-tools.zip" \
-            "https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip"
-
-
-          # ==========================================
-          # Command Line Tools Extract
-          # ==========================================
-          echo
-          echo "Command Line Tools Extract হচ্ছে..."
-
-          rm -rf "$HOME/android-cmdline-tools/latest"
-
-          mkdir -p "$HOME/android-cmdline-tools/latest"
-
-          unzip -q \
-            "$HOME/android-cmdline-tools.zip" \
-            -d "$HOME/android-cmdline-tools/temp"
-
-
-          # ==========================================
-          # সঠিক Directory তৈরি
-          # ==========================================
-          mkdir -p "$HOME/android-cmdline-tools/latest"
-
-          cp -r \
-            "$HOME/android-cmdline-tools/temp/cmdline-tools/"* \
-            "$HOME/android-cmdline-tools/latest/"
-
-
-          # ==========================================
-          # Buildozer SDK-তে Command Line Tools কপি
-          # ==========================================
-          mkdir -p "$SDK_ROOT/cmdline-tools"
-
-          rm -rf "$SDK_ROOT/cmdline-tools/latest"
-
-          cp -r \
-            "$HOME/android-cmdline-tools/latest" \
-            "$SDK_ROOT/cmdline-tools/latest"
-
-
-          # ==========================================
-          # sdkmanager নির্ধারণ
-          # ==========================================
-          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          echo "Python:"
+          python --version
 
           echo
-          echo "SDKMANAGER:"
-          echo "$SDKMANAGER"
+          echo "Java:"
+          java -version
+
+          echo
+          echo "Buildozer:"
+          buildozer --version
+
+          echo
+          echo "Project Files:"
+          ls -la
 
 
-          # ==========================================
-          # sdkmanager পরীক্ষা
-          # ==========================================
-          if [ ! -f "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager পাওয়া যায়নি।"
+      # ==========================================
+      # ৭. main.py Syntax Check
+      # ==========================================
+      - name: Python Syntax পরীক্ষা
+        run: |
+          python -m py_compile main.py
+
+          echo
+          echo "main.py syntax ঠিক আছে"
+
+
+      # ==========================================
+      # ৮. পুরোনো Build পরিষ্কার
+      # ==========================================
+      - name: Build পরিষ্কার
+        run: |
+          echo "=========================================="
+          echo "BUILD CLEAN"
+          echo "=========================================="
+
+          rm -rf .buildozer
+          rm -rf bin
+
+          mkdir -p bin
+
+          echo "Build directory প্রস্তুত হয়েছে"
+
+
+      # ==========================================
+      # ৯. APK তৈরি
+      # ==========================================
+      - name: APK তৈরি
+        run: |
+          echo "=========================================="
+          echo "V16 ANTIVIRUS APK BUILD"
+          echo "=========================================="
+
+          buildozer -v android debug
+
+
+      # ==========================================
+      # ১০. APK পরীক্ষা
+      # ==========================================
+      - name: APK পরীক্ষা
+        if: always()
+        run: |
+          echo
+          echo "=========================================="
+          echo "GENERATED APK"
+          echo "=========================================="
+
+          if [ -d "bin" ] && find bin -maxdepth 1 -type f -name "*.apk" | grep -q ".apk"; then
+
+            echo "APK সফলভাবে তৈরি হয়েছে।"
+
+            find bin \
+              -maxdepth 1 \
+              -type f \
+              -name "*.apk" \
+              -exec ls -lh {} \;
+
+          else
+
+            echo "ERROR: APK তৈরি হয়নি।"
 
             echo
-            echo "sdkmanager খোঁজা হচ্ছে:"
+            echo "APK খোঁজা হচ্ছে..."
 
-            find "$SDK_ROOT" \
+            find . \
               -type f \
-              -name "sdkmanager" \
+              \( -name "*.apk" -o -name "*.aab" \) \
               -print || true
 
             exit 1
+
           fi
 
 
-          chmod +x "$SDKMANAGER"
-
-
-          # ==========================================
-          # Android SDK License
-          # ==========================================
-          echo
-          echo "Android SDK License প্রস্তুত হচ্ছে..."
-
-          mkdir -p "$SDK_ROOT/licenses"
-
-          cat > "$SDK_ROOT/licenses/android-sdk-license" << 'EOF'
-24333f8a63b6825ea9c5514f83c2829b004d1fee
-d56f5187479451eabf01fb78af6dfcb131a6481e
-EOF
-
-
-          # ==========================================
-          # License গ্রহণ
-          # ==========================================
-          echo
-          echo "Android License গ্রহণ করা হচ্ছে..."
-
-          yes | "$SDKMANAGER" \
-            --sdk_root="$SDK_ROOT" \
-            --licenses || true
-
-
-          # ==========================================
-          # Android SDK Components ইনস্টল
-          # ==========================================
-          echo
-          echo "Android SDK Components ইনস্টল হচ্ছে..."
-
-          "$SDKMANAGER" \
-            --sdk_root="$SDK_ROOT" \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
-
-          # ==========================================
-          # AIDL পরীক্ষা
-          # ==========================================
-          echo
-          echo "=========================================="
-          echo "AIDL পরীক্ষা"
-          echo "=========================================="
-
-          AIDL="$SDK_ROOT/build-tools/35.0.0/aidl"
-
-          if [ ! -f "$AIDL" ]; then
-            echo "ERROR: AIDL পাওয়া যায়নি।"
-
-            echo
-            echo "Build-Tools-এর ভিতরে AIDL খোঁজা হচ্ছে:"
-
-            find "$SDK_ROOT/build-tools" \
-              -type f \
-              -name "aidl" \
-              -print || true
-
-            exit 1
-          fi
-
-          chmod +x "$AIDL"
-
-          echo
-          echo "AIDL পাওয়া গেছে:"
-          echo "$AIDL"
-
-          "$AIDL" --version || true
-
-
-          # ==========================================
-          # SDKMANAGER পরীক্ষা
-          # ==========================================
-          echo
-          echo "=========================================="
-          echo "SDKMANAGER পরীক্ষা"
-          echo "=========================================="
-
-          "$SDKMANAGER" \
-            --sdk_root="$SDK_ROOT" \
-            --version
-
-
-          # ==========================================
-          # SDK সম্পূর্ণ পরীক্ষা
-          # ==========================================
-          echo
-          echo "=========================================="
-          echo "ANDROID SDK READY"
-          echo "=========================================="
-
-          echo "SDK:"
-          echo "$SDK_ROOT"
-
-          echo
-          echo "Build Tools:"
-          ls -la "$SDK_ROOT/build-tools"
-
-          echo
-          echo "Platforms:"
-          ls -la "$SDK_ROOT/platforms"
-
-          echo
-          echo "Platform Tools:"
-          ls -la "$SDK_ROOT/platform-tools"
+      # ==========================================
+      # ১১. APK Upload
+      # ==========================================
+      - name: APK Upload
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: V16-Antivirus-APK
+          path: "bin/*.apk"
+          if-no-files-found: error
