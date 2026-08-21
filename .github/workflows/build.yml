@@ -585,26 +585,121 @@ jobs:
 
 
       # =====================================================
-      # 21. Find APK
+      # 21. Verify APK Output
       # =====================================================
-      - name: Find APK
+      - name: Verify APK Output
+        if: success()
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          echo "=========================================="
+          echo "VERIFYING APK OUTPUT"
+          echo "=========================================="
+
+          echo
+          echo "Searching for APK files..."
+
+          APK_COUNT=$(find . \
+            -type f \
+            -name "*.apk" \
+            ! -path "./.git/*" \
+            | wc -l)
+
+          echo
+          echo "APK count: $APK_COUNT"
+
+          if [ "$APK_COUNT" -eq 0 ]; then
+            echo "ERROR: No APK file was generated."
+            exit 1
+          fi
+
+          echo
+          echo "APK files found:"
+
+          find . \
+            -type f \
+            -name "*.apk" \
+            ! -path "./.git/*" \
+            -print
+
+          echo
+          echo "APK output verified."
+
+
+      # =====================================================
+      # 22. Show APK Details
+      # =====================================================
+      - name: Show APK Details
+        if: success()
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          echo "=========================================="
+          echo "APK DETAILS"
+          echo "=========================================="
+
+          find . \
+            -type f \
+            -name "*.apk" \
+            ! -path "./.git/*" \
+            -print0 |
+          while IFS= read -r -d '' APK; do
+
+            echo
+            echo "------------------------------------------"
+            echo "APK:"
+            echo "$APK"
+
+            echo
+            echo "File size:"
+            du -h "$APK"
+
+            echo
+            echo "SHA256:"
+            sha256sum "$APK"
+
+          done
+
+          echo
+          echo "APK details completed."
+
+
+      # =====================================================
+      # 23. Find APK and AAB
+      # =====================================================
+      - name: Find APK and AAB
         if: always()
         shell: bash
         run: |
           set +e
 
           echo "=========================================="
-          echo "SEARCHING APK FILES"
+          echo "APK / AAB FILES"
           echo "=========================================="
+
+          echo
+          echo "APK files:"
 
           find . \
             -type f \
-            \( -name "*.apk" -o -name "*.aab" \) \
+            -name "*.apk" \
+            ! -path "./.git/*" \
+            -print
+
+          echo
+          echo "AAB files:"
+
+          find . \
+            -type f \
+            -name "*.aab" \
+            ! -path "./.git/*" \
             -print
 
 
       # =====================================================
-      # 22. Upload APK
+      # 24. Upload APK
       # =====================================================
       - name: Upload APK
         if: success()
@@ -618,7 +713,7 @@ jobs:
 
 
       # =====================================================
-      # 23. Upload Build Logs
+      # 25. Upload Build Logs
       # =====================================================
       - name: Upload Build Logs
         if: always()
@@ -626,6 +721,9 @@ jobs:
         with:
           name: V16-Buildozer-Logs
           path: |
-            .buildozer/
+            .buildozer/android/platform/python-for-android/
+            .buildozer/android/platform/build-*/build/
+            .buildozer/android/platform/*/build/
+            .buildozer/android/platform/android/
             buildozer.spec
           if-no-files-found: warn
