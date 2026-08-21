@@ -109,14 +109,13 @@ jobs:
           echo "Installed packages:"
           python -m pip list
 
-
       # =====================================================
       # 6. Buildozer Test
       # =====================================================
       - name: Test Buildozer
         shell: bash
         run: |
-          set -eux
+          set -euxo pipefail
 
           echo "=========================================="
           echo "BUILDOZER TEST"
@@ -133,38 +132,41 @@ jobs:
           python -m buildozer --version
 
           echo
+          echo "Buildozer executable:"
+          command -v buildozer || true
+
+          echo
           echo "Buildozer module works."
 
 
       # =====================================================
-      # 7. Android SDK
+      # 7. Verify Android SDK + NDK
       # =====================================================
-      - name: Verify Android SDK
+      - name: Verify Android SDK and NDK
         shell: bash
         run: |
-          set -eux
+          set -euxo pipefail
 
           SDK="/usr/local/lib/android/sdk"
           NDK="$SDK/ndk/27.3.13750724"
 
           echo "=========================================="
-          echo "ANDROID SDK"
+          echo "ANDROID SDK / NDK"
           echo "=========================================="
 
           test -d "$SDK"
+          test -d "$SDK/platform-tools"
           test -d "$SDK/platforms/android-35"
           test -d "$SDK/build-tools/35.0.0"
           test -x "$SDK/build-tools/35.0.0/aidl"
 
           echo
-          echo "ANDROID_HOME:"
+          echo "SDK:"
           echo "$SDK"
 
           echo
-          echo "ANDROID NDK:"
-          echo "$NDK"
-
-          test -d "$NDK"
+          echo "Build Tools:"
+          ls -la "$SDK/build-tools/35.0.0"
 
           echo
           echo "AIDL:"
@@ -172,7 +174,21 @@ jobs:
 
           echo
           echo "NDK:"
-          "$NDK/ndk-build" --version | head -n 5
+          echo "$NDK"
+
+          test -d "$NDK"
+          test -x "$NDK/ndk-build"
+
+          echo
+          echo "NDK version:"
+          cat "$NDK/source.properties"
+
+          echo
+          echo "NDK Build:"
+          "$NDK/ndk-build" --version | head -n 5 || true
+
+          echo
+          echo "Android SDK and NDK are ready."
 
 
       # =====================================================
@@ -181,13 +197,13 @@ jobs:
       - name: Configure Android Environment
         shell: bash
         run: |
-          set -eux
+          set -euxo pipefail
 
           SDK="/usr/local/lib/android/sdk"
           NDK="$SDK/ndk/27.3.13750724"
 
           echo "=========================================="
-          echo "ANDROID ENVIRONMENT"
+          echo "CONFIGURE ANDROID ENVIRONMENT"
           echo "=========================================="
 
           echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
@@ -202,44 +218,179 @@ jobs:
           echo "$SDK/build-tools/35.0.0" >> "$GITHUB_PATH"
 
           echo
-          echo "Environment configured."
+          echo "Environment variables configured."
 
 
       # =====================================================
-      # 9. Final Android Environment Test
+      # 9. Install / Verify Android SDK Licenses
+      # =====================================================
+      - name: Verify Android SDK Licenses
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          SDK="$ANDROID_HOME"
+
+          echo "=========================================="
+          echo "ANDROID SDK LICENSES"
+          echo "=========================================="
+
+          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$SDK/cmdline-tools/bin/sdkmanager"
+          fi
+
+          if [ -x "$SDKMANAGER" ]; then
+            echo "sdkmanager:"
+            "$SDKMANAGER" --version
+
+            echo
+            echo "Accepting Android SDK licenses..."
+
+            yes | "$SDKMANAGER" \
+              --sdk_root="$SDK" \
+              --licenses || true
+          else
+            echo "sdkmanager not found."
+            echo "Continuing because required SDK components already exist."
+          fi
+
+          echo
+          echo "License check completed."
+
+
+      # =====================================================
+      # 10. Final Android Environment Test
       # =====================================================
       - name: Final Android Environment Test
         shell: bash
         run: |
-          set -eux
+          set -euxo pipefail
 
           echo "=========================================="
           echo "FINAL ANDROID TEST"
           echo "=========================================="
 
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          echo
+          echo "ANDROID_HOME:"
+          echo "$ANDROID_HOME"
+
+          echo
+          echo "ANDROID_SDK_ROOT:"
+          echo "$ANDROID_SDK_ROOT"
+
+          echo
+          echo "ANDROID_NDK_HOME:"
+          echo "$ANDROID_NDK_HOME"
+
+          echo
+          echo "Java:"
+          java -version
+
+          echo
+          echo "Python:"
+          python --version
+
+          echo
+          echo "Buildozer:"
+          python -m buildozer --version
 
           echo
           echo "AIDL:"
           command -v aidl || true
-          aidl --version || true
+
+          "$ANDROID_HOME/build-tools/35.0.0/aidl" \
+            --version || true
 
           echo
-          echo "SDK:"
+          echo "SDK check:"
           test -d "$ANDROID_HOME"
 
           echo
-          echo "NDK:"
+          echo "Platform check:"
+          test -d "$ANDROID_HOME/platforms/android-35"
+
+          echo
+          echo "Build Tools check:"
+          test -d "$ANDROID_HOME/build-tools/35.0.0"
+
+          echo
+          echo "NDK check:"
           test -d "$ANDROID_NDK_HOME"
 
           echo
-          echo "Android environment OK."
+          echo "=========================================="
+          echo "ANDROID ENVIRONMENT OK"
+          echo "=========================================="
 
 
       # =====================================================
-      # 10. Buildozer APK
+      # 11. Check Project Files
+      # =====================================================
+      - name: Check Project Files
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          echo "=========================================="
+          echo "PROJECT FILE CHECK"
+          echo "=========================================="
+
+          echo
+          echo "Current directory:"
+          pwd
+
+          echo
+          echo "Project files:"
+          ls -lah
+
+          echo
+          echo "buildozer.spec:"
+          test -f buildozer.spec
+
+          echo
+          echo "main.py:"
+          test -f main.py
+
+          echo
+          echo "requirements:"
+          if [ -f requirements.txt ]; then
+            cat requirements.txt
+          else
+            echo "No requirements.txt found."
+            echo "Using requirements from buildozer.spec."
+          fi
+
+          echo
+          echo "Project files OK."
+
+
+      # =====================================================
+      # 12. Validate Buildozer Configuration
+      # =====================================================
+      - name: Validate Buildozer Configuration
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          echo "=========================================="
+          echo "BUILDOZER CONFIGURATION"
+          echo "=========================================="
+
+          echo
+          echo "Important Buildozer settings:"
+
+          grep -E \
+            '^(title|package.name|package.domain|source.include_exts|requirements|android.api|android.minapi|android.ndk|android.arch)' \
+            buildozer.spec || true
+
+          echo
+          echo "Buildozer configuration detected."
+
+
+      # =====================================================
+      # 13. Build V16 Antivirus APK
       # =====================================================
       - name: Build V16 Antivirus APK
         shell: bash
@@ -252,11 +403,19 @@ jobs:
 
           python -m buildozer --version
 
+          echo
+          echo "Starting Buildozer..."
+
           python -m buildozer -v android debug
+
+          echo
+          echo "=========================================="
+          echo "BUILD COMMAND FINISHED"
+          echo "=========================================="
 
 
       # =====================================================
-      # 11. Find APK
+      # 14. Search APK / AAB
       # =====================================================
       - name: Find APK
         if: always()
@@ -265,19 +424,29 @@ jobs:
           set +e
 
           echo "=========================================="
-          echo "APK FILES"
+          echo "SEARCHING APK / AAB"
           echo "=========================================="
+
+          echo
+          echo "bin directory:"
+          ls -lah bin/ 2>/dev/null || true
+
+          echo
+          echo "All APK/AAB files:"
 
           find . \
             -type f \
             \( -name "*.apk" -o -name "*.aab" \) \
             -print
 
+          echo
+          echo "APK search completed."
+
 
       # =====================================================
-      # 12. Upload APK
+      # 15. Upload APK
       # =====================================================
-      - name: Upload APK
+      - name: Upload V16 Antivirus APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
@@ -289,16 +458,15 @@ jobs:
 
 
       # =====================================================
-      # 13. Upload Build Logs
+      # 16. Upload Build Logs
       # =====================================================
       - name: Upload Build Logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: V16-Buildozer-Logs
+          name: V16-Buildozer-Full-Logs
           path: |
-            .buildozer/android/platform/python-for-android/
-            .buildozer/android/platform/build-*/build/
-            .buildozer/android/platform/*/build/
+            .buildozer/
             buildozer.spec
+            main.py
           if-no-files-found: warn
