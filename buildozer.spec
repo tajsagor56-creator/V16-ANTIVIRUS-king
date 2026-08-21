@@ -23,6 +23,7 @@ android.archs = arm64-v8a,armeabi-v7a
 
 android.private_storage = True
 android.allow_backup = False
+
 android.uses_cleartext_connection = False
 
 
