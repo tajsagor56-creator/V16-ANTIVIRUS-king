@@ -410,24 +410,93 @@ jobs:
 
 
       # ==========================================
-      # ১৩. Buildozer Error Log Upload
-      # Build সফল বা ব্যর্থ—দুই অবস্থাতেই Upload হবে
+      # ১৩. Buildozer সম্পূর্ণ Log সংরক্ষণ
       # ==========================================
-      - name: Buildozer Error Log Upload
+      - name: Buildozer Log Upload
+        if: always()
+        shell: bash
+        run: |
+          echo "=========================================="
+          echo "BUILD LOG COLLECTION"
+          echo "=========================================="
+
+          if [ -f "buildozer-full.log" ]; then
+            echo "Buildozer log পাওয়া গেছে।"
+            ls -lh buildozer-full.log
+          else
+            echo "WARNING: buildozer-full.log পাওয়া যায়নি।"
+            echo "Buildozer log তৈরি করার চেষ্টা করা হচ্ছে..."
+
+            {
+              echo "V16 ANTIVIRUS BUILD LOG"
+              echo "=========================================="
+              echo
+              echo "Python:"
+              python --version || true
+
+              echo
+              echo "Buildozer:"
+              buildozer --version || true
+
+              echo
+              echo "Buildozer configuration:"
+              grep -E \
+                '^(requirements|android.api|android.minapi|android.ndk|android.archs)' \
+                buildozer.spec || true
+
+              echo
+              echo "Environment:"
+              env | grep -E \
+                '^(ANDROID|PACKAGES_PATH|PYTHON|JAVA)' || true
+
+            } > buildozer-full.log
+          fi
+
+
+      # ==========================================
+      # ১৪. শুধুমাত্র মূল Buildozer Log Upload
+      # ==========================================
+      - name: Upload Buildozer Error Log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: V16-Buildozer-Full-Log
-          path: |
-            buildozer-full.log
-            .buildozer/android/platform/**/*.log
-            .buildozer/android/platform/**/*.txt
+          name: V16-Buildozer-Error-Log
+          path: buildozer-full.log
           if-no-files-found: warn
           retention-days: 7
 
 
       # ==========================================
-      # ১৪. APK পরীক্ষা
+      # ১৫. গুরুত্বপূর্ণ Error Summary
+      # ==========================================
+      - name: Build Error Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "=========================================="
+          echo "BUILD ERROR SUMMARY"
+          echo "=========================================="
+
+          if [ -f "buildozer-full.log" ]; then
+
+            echo
+            echo "---- ERROR ----"
+            grep -n -E \
+              "ERROR:|Error:|error:|FAILED|Failed|failed|Exception|Traceback" \
+              buildozer-full.log \
+              | tail -n 100 || true
+
+            echo
+            echo "---- LAST 150 LINES ----"
+            tail -n 150 buildozer-full.log
+
+          else
+            echo "Build log পাওয়া যায়নি।"
+          fi
+
+
+      # ==========================================
+      # ১৬. APK পরীক্ষা
       # ==========================================
       - name: APK পরীক্ষা
         if: always()
@@ -468,7 +537,7 @@ jobs:
 
 
       # ==========================================
-      # ১৫. APK Upload
+      # ১৭. APK Upload
       # ==========================================
       - name: APK Upload
         if: success()
