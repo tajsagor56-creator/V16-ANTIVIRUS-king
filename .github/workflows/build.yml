@@ -201,12 +201,19 @@ jobs:
 
           mkdir -p "$SDK_ROOT/licenses"
 
-          cat > "$SDK_ROOT/licenses/android-sdk-license" << 'EOF'
-24333f8a63b6825ea9c5514f83c2829b004d1fee
-d56f5187479451eabf01fb78af6dfcb131a6481e
-EOF
+          printf '%s\n' \
+            "24333f8a63b6825ea9c5514f83c2829b004d1fee" \
+            "d56f5187479451eabf01fb78af6dfcb131a6481e" \
+            > "$SDK_ROOT/licenses/android-sdk-license"
 
 
+          # ------------------------------------------
+          # Accept Android SDK licenses
+          # ------------------------------------------
+
+          yes | "$SDKMANAGER" \
+            --sdk_root="$SDK_ROOT" \
+            --licenses || true
           # ------------------------------------------
           # Accept licenses
           # ------------------------------------------
