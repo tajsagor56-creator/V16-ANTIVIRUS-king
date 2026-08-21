@@ -7,7 +7,6 @@ on:
       - main
 
 jobs:
-
   build:
 
     runs-on: ubuntu-22.04
@@ -23,7 +22,7 @@ jobs:
 
 
       # ======================================================
-      # 2. PYTHON
+      # 2. PYTHON 3.11
       # ======================================================
 
       - name: Setup Python
@@ -33,10 +32,10 @@ jobs:
 
 
       # ======================================================
-      # 3. JAVA
+      # 3. JAVA 17
       # ======================================================
 
-      - name: Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -50,19 +49,12 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK packages
-        run: |
-          sdkmanager "platform-tools"
-          sdkmanager "platforms;android-35"
-          sdkmanager "build-tools;35.0.0"
-          yes | sdkmanager --licenses
-
 
       # ======================================================
-      # 5. INSTALL ANDROID COMPONENTS
+      # 5. INSTALL SDK + NDK
       # ======================================================
 
-      - name: Install Android SDK components
+      - name: Install Android components
         run: |
 
           yes | sdkmanager --licenses || true
@@ -71,38 +63,22 @@ jobs:
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0" \
-            "cmdline-tools;latest"
+            "cmdline-tools;latest" \
+            "ndk;28.2.13676358"
 
           yes | sdkmanager --licenses || true
 
 
       # ======================================================
-      # 6. FIX LEGACY SDKMANAGER PATH
+      # 6. ANDROID ENVIRONMENT
       # ======================================================
 
-      - name: Fix legacy sdkmanager path
+      - name: Configure Android environment
         run: |
 
-          mkdir -p "$ANDROID_HOME/tools/bin"
+          echo "ANDROID_HOME=$ANDROID_HOME"
 
-          ln -sf \
-            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-            "$ANDROID_HOME/tools/bin/sdkmanager"
-
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-
-          echo "$ANDROID_HOME/tools/bin" >> "$GITHUB_PATH"
-
-
-      # ======================================================
-      # 7. INSTALL NDK 28.2
-      # ======================================================
-
-      - name: Install Android NDK
-        run: |
-
-          sdkmanager \
-            "ndk;28.2.13676358"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
 
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
 
@@ -110,9 +86,13 @@ jobs:
 
           echo "ANDROIDNDK=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
 
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+
 
       # ======================================================
-      # 8. VERIFY SDK / NDK
+      # 7. VERIFY ANDROID
       # ======================================================
 
       - name: Verify Android environment
@@ -122,11 +102,8 @@ jobs:
           echo "ANDROID ENVIRONMENT"
           echo "=========================================="
 
-          echo "ANDROID_HOME=$ANDROID_HOME"
-
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-
-          echo "ANDROID_NDK=$ANDROID_NDK"
+          echo "SDK:"
+          echo "$ANDROID_HOME"
 
           echo
 
@@ -147,14 +124,14 @@ jobs:
           echo
 
           echo "NDK:"
-          test -f "$ANDROID_HOME/ndk/28.2.13676358/source.properties"
+          test -f "$ANDROID_NDK_HOME/source.properties"
 
           grep Pkg.Revision \
-            "$ANDROID_HOME/ndk/28.2.13676358/source.properties"
+            "$ANDROID_NDK_HOME/source.properties"
 
 
       # ======================================================
-      # 9. INSTALL PYTHON BUILD PACKAGES
+      # 8. INSTALL BUILD TOOLS
       # ======================================================
 
       - name: Install Buildozer
@@ -168,34 +145,47 @@ jobs:
 
 
       # ======================================================
-      # 10. VERIFY BUILD CONFIG
+      # 9. VERIFY PROJECT
       # ======================================================
 
-      - name: Check project files
+      - name: Verify project files
         run: |
 
           echo "=========================================="
-          echo "PROJECT FILES"
+          echo "PROJECT CHECK"
           echo "=========================================="
 
           test -f main.py
-
           test -f buildozer.spec
 
-          echo "main.py found"
-
-          echo "buildozer.spec found"
+          echo "main.py       : OK"
+          echo "buildozer.spec: OK"
 
 
       # ======================================================
-      # 11. CLEAN OLD BUILDS
+      # 10. SHOW BUILDOZER CONFIG
       # ======================================================
 
-      - name: Clean Buildozer
+      - name: Show Buildozer configuration
+        run: |
+
+          echo "=========================================="
+          echo "BUILDOZER CONFIGURATION"
+          echo "=========================================="
+
+          grep -E \
+            "^(title|package.name|package.domain|version|requirements|android.api|android.minapi|android.ndk|android.ndk_api)" \
+            buildozer.spec || true
+
+
+      # ======================================================
+      # 11. CLEAN OLD BUILD
+      # ======================================================
+
+      - name: Clean old Buildozer files
         run: |
 
           rm -rf .buildozer
-
           rm -rf bin
 
           mkdir -p bin
@@ -206,11 +196,17 @@ jobs:
       # ======================================================
 
       - name: Build APK
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
+          ANDROID_NDK: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
+          ANDROIDNDK: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
+
         run: |
-          buildozer android debug
 
           echo "=========================================="
-          echo "STARTING APK BUILD"
+          echo "STARTING V16 ANTIVIRUS BUILD"
           echo "=========================================="
 
           echo
@@ -221,43 +217,42 @@ jobs:
           echo
 
           echo "Buildozer:"
-          python -m buildozer --version
+          buildozer --version
 
           echo
 
-          echo "ANDROID_HOME:"
+          echo "Android SDK:"
           echo "$ANDROID_HOME"
 
           echo
 
-          echo "ANDROID_NDK_HOME:"
+          echo "Android NDK:"
           echo "$ANDROID_NDK_HOME"
 
           echo
 
           echo "NDK VERSION:"
-
           grep Pkg.Revision \
             "$ANDROID_NDK_HOME/source.properties"
 
           echo
 
           echo "=========================================="
-          echo "BUILDOZER BUILD"
+          echo "BUILDOZER DEBUG APK"
           echo "=========================================="
 
-          python -m buildozer -v android debug
+          buildozer -v android debug
 
 
       # ======================================================
-      # 13. SHOW APK
+      # 13. VERIFY APK
       # ======================================================
 
-      - name: Show APK
+      - name: Verify APK
         run: |
 
           echo "=========================================="
-          echo "APK FILES"
+          echo "APK RESULT"
           echo "=========================================="
 
           find bin \
@@ -265,6 +260,20 @@ jobs:
             -type f \
             -name "*.apk" \
             -print
+
+          APK_COUNT=$(find bin \
+            -maxdepth 1 \
+            -type f \
+            -name "*.apk" | wc -l)
+
+          if [ "$APK_COUNT" -eq 0 ]; then
+            echo "ERROR: APK was not generated."
+            exit 1
+          fi
+
+          echo
+          echo "APK GENERATED SUCCESSFULLY"
+          echo "Number of APK files: $APK_COUNT"
 
 
       # ======================================================
