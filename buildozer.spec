@@ -17,10 +17,10 @@ requirements = python3,kivy,plyer
 
 android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,POST_NOTIFICATIONS
 
-android.api = 35
-android.minapi = 23
+android.api = 33
+android.minapi = 24
+android.ndk = 25b
 
-# প্রথম সফল APK তৈরির জন্য শুধু ARM64 ব্যবহার করা হচ্ছে
 android.archs = arm64-v8a
 
 android.private_storage = True
