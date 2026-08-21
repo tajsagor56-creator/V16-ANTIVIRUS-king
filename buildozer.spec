@@ -1,4 +1,3 @@
-ini
 [app]
 
 title = V16 Antivirus Pro
@@ -13,6 +12,8 @@ version = 16.2
 
 orientation = portrait
 fullscreen = 0
+
+python_version = 3.11
 
 requirements = python3,kivy,plyer
 
