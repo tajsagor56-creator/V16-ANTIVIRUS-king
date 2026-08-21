@@ -19,7 +19,7 @@ android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,POST_NOTIFICA
 android.api = 35
 android.minapi = 23
 
-android.archs = arm64-v8a,armeabi-v7a
+android.archs = arm64-v8a
 
 android.private_storage = True
 android.allow_backup = False
