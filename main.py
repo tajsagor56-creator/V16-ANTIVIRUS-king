@@ -1,1941 +1,922 @@
 # ============================================================
-# V16 ANTIVIRUS PRO - COMPLETE ANDROID VERSION
-# Version: 16.2
+# V16 ANTIVIRUS PRO
+# Stable Android Antivirus Scanner
+# Version 16.2
 # ============================================================
 
 import os
 import json
 import time
 import hashlib
-import shutil
+import zipfile
 import threading
-from pathlib import Path
 from datetime import datetime
 
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.metrics import dp
-from kivy.graphics import Color, RoundedRectangle, Line
-from kivy.properties import NumericProperty
-from kivy.uix.widget import Widget
+from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.button import Button
-from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.progressbar import ProgressBar
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.popup import Popup
 
-try:
-    from plyer import notification
-except Exception:
-    notification = None
-
 
 # ============================================================
-# APP INFORMATION
+# CONFIGURATION
 # ============================================================
 
 APP_NAME = "V16 Antivirus Pro"
 VERSION = "16.2"
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+HISTORY_FILE = os.path.join(BASE_DIR, "scan_history.json")
 
-# ============================================================
-# COLORS
-# ============================================================
-
-WHITE = (1, 1, 1, 1)
-GREEN = (0.1, 0.9, 0.4, 1)
-RED = (1, 0.2, 0.2, 1)
-YELLOW = (1, 0.8, 0.1, 1)
-PURPLE = (0.65, 0.3, 1, 1)
-CYAN = (0.1, 0.8, 1, 1)
-GRAY = (0.55, 0.6, 0.65, 1)
-DARK = (0.015, 0.025, 0.04, 1)
-PANEL = (0.025, 0.06, 0.09, 1)
-
-
-# ============================================================
-# DIRECTORIES
-# ============================================================
-
-APP_DIR = Path(
-    App.get_running_app().user_data_dir
-    if App.get_running_app()
-    else os.path.join(
-        os.path.expanduser("~"),
-        ".v16antivirus"
-    )
-)
-
-APP_DIR.mkdir(parents=True, exist_ok=True)
-
-HISTORY_FILE = APP_DIR / "history.json"
-CACHE_FILE = APP_DIR / "monitor_cache.json"
-QUARANTINE_DIR = APP_DIR / "quarantine"
-
-QUARANTINE_DIR.mkdir(
-    parents=True,
-    exist_ok=True
-)
-
-
-# ============================================================
-# SCAN SETTINGS
-# ============================================================
-
-CHUNK_SIZE = 64 * 1024
-
-MAX_MONITOR_NEW_FILES_PER_CYCLE = 20
-
-MONITOR_INTERVAL = 8
-
-
-# ============================================================
-# KNOWN MALWARE SHA-256 DATABASE
-# ============================================================
-#
-# এখানে প্রকৃত IOC SHA-256 যোগ করা যাবে।
-# কোনো hash database-এ না থাকলে সেটিকে malware বলা হবে না।
-#
-
+# Known malicious SHA-256 hashes.
+# এখানে নিজের verified malware hashes যোগ করতে পারবে।
 KNOWN_MALWARE_HASHES = {
-    # "example_sha256_hash_here",
+    # "sha256_hash_here",
+}
+
+
+# Suspicious Android permissions.
+SUSPICIOUS_PERMISSIONS = {
+    "SEND_SMS": 2,
+    "RECEIVE_SMS": 2,
+    "READ_SMS": 2,
+    "READ_CONTACTS": 1,
+    "WRITE_CONTACTS": 1,
+    "CALL_PHONE": 2,
+    "RECORD_AUDIO": 1,
+    "CAMERA": 1,
+    "ACCESS_FINE_LOCATION": 1,
+    "ACCESS_COARSE_LOCATION": 1,
+    "SYSTEM_ALERT_WINDOW": 2,
+    "RECEIVE_BOOT_COMPLETED": 1,
+    "WRITE_SETTINGS": 2,
+    "REQUEST_INSTALL_PACKAGES": 2,
+    "BIND_ACCESSIBILITY_SERVICE": 3,
 }
 
 
 # ============================================================
-# SUSPICIOUS EXTENSIONS
+# FILE HASH
 # ============================================================
 
-SUSPICIOUS_EXTENSIONS = {
-    ".exe",
-    ".scr",
-    ".bat",
-    ".cmd",
-    ".vbs",
-    ".vbe",
-    ".js",
-    ".jar",
-    ".pif",
-}
-
-
-# ============================================================
-# ANDROID PERMISSION
-# ============================================================
-
-def request_android_permissions():
+def sha256_file(file_path, chunk_size=1024 * 1024):
     """
-    Android runtime permissions.
-
-    নতুন Android সংস্করণে storage access সীমিত হতে পারে।
-    তাই permission request ব্যর্থ হলেও app বন্ধ হবে না।
+    Calculate SHA-256 without loading the entire file into RAM.
     """
 
-    try:
-        from android.permissions import request_permissions
-
-        permissions = [
-            "android.permission.READ_EXTERNAL_STORAGE",
-            "android.permission.WRITE_EXTERNAL_STORAGE",
-        ]
-
-        try:
-            permissions.append(
-                "android.permission.POST_NOTIFICATIONS"
-            )
-        except Exception:
-            pass
-
-        request_permissions(permissions)
-
-    except Exception:
-        pass
-
-
-# ============================================================
-# NOTIFICATION
-# ============================================================
-
-def notify_user(title, message):
+    digest = hashlib.sha256()
 
     try:
-        if notification is not None:
-            notification.notify(
-                title=title,
-                message=message,
-                app_name=APP_NAME,
-                timeout=5
-            )
-    except Exception:
-        pass
-
-
-# ============================================================
-# STORAGE ROOTS
-# ============================================================
-
-def scan_roots():
-
-    possible_roots = [
-        "/storage/emulated/0",
-        "/sdcard",
-    ]
-
-    roots = []
-
-    for root in possible_roots:
-
-        try:
-
-            path = Path(root)
-
-            if path.exists() and os.access(root, os.R_OK):
-                roots.append(path)
-
-        except Exception:
-            pass
-
-    return roots
-
-
-# ============================================================
-# FILE ITERATOR
-# ============================================================
-
-def iter_files(root):
-
-    try:
-
-        for current_root, dirs, files in os.walk(
-            str(root),
-            topdown=True
-        ):
-
-            # Android protected directories
-            dirs[:] = [
-                d for d in dirs
-                if d not in {
-                    ".thumbnails",
-                    "Android/data",
-                    "Android/obb"
-                }
-            ]
-
-            for filename in files:
-
-                path = os.path.join(
-                    current_root,
-                    filename
-                )
-
-                try:
-
-                    if os.path.isfile(path):
-                        yield path
-
-                except Exception:
-                    continue
-
-    except Exception:
-        return
-
-
-# ============================================================
-# SHA-256
-# ============================================================
-
-def calculate_sha256(path):
-
-    sha = hashlib.sha256()
-
-    try:
-
-        with open(
-            path,
-            "rb"
-        ) as file:
-
+        with open(file_path, "rb") as f:
             while True:
-
-                data = file.read(CHUNK_SIZE)
+                data = f.read(chunk_size)
 
                 if not data:
                     break
 
-                sha.update(data)
+                digest.update(data)
 
-        return sha.hexdigest()
-
-    except Exception:
-        return ""
-
-
-# ============================================================
-# FILE SIGNATURE FOR MONITOR
-# ============================================================
-
-def file_signature(path):
-
-    try:
-
-        stat = os.stat(path)
-
-        return {
-            "size": stat.st_size,
-            "mtime": stat.st_mtime
-        }
+        return digest.hexdigest()
 
     except Exception:
         return None
 
 
 # ============================================================
-# LOAD JSON
+# APK ANALYZER
 # ============================================================
 
-def load_json(path, default):
+class APKAnalyzer:
 
-    try:
+    @staticmethod
+    def analyze(apk_path):
+        result = {
+            "valid_apk": False,
+            "sha256": None,
+            "confirmed_malware": False,
+            "suspicious": False,
+            "risk_score": 0,
+            "permissions": [],
+            "files": [],
+            "reason": [],
+        }
 
-        if not path.exists():
-            return default
+        # ----------------------------------------------------
+        # SHA-256
+        # ----------------------------------------------------
 
-        with open(
-            path,
-            "r",
-            encoding="utf-8"
-        ) as file:
+        file_hash = sha256_file(apk_path)
 
-            data = json.load(file)
+        result["sha256"] = file_hash
 
-        return data
-
-    except Exception:
-        return default
-
-
-# ============================================================
-# SAVE JSON
-# ============================================================
-
-def save_json(path, data):
-
-    try:
-
-        temp = path.with_suffix(
-            path.suffix + ".tmp"
-        )
-
-        with open(
-            temp,
-            "w",
-            encoding="utf-8"
-        ) as file:
-
-            json.dump(
-                data,
-                file,
-                indent=2,
-                ensure_ascii=False
+        if file_hash and file_hash.lower() in KNOWN_MALWARE_HASHES:
+            result["confirmed_malware"] = True
+            result["suspicious"] = True
+            result["risk_score"] += 10
+            result["reason"].append(
+                "Known malicious SHA-256 hash matched"
             )
 
-        temp.replace(path)
+        # ----------------------------------------------------
+        # ZIP/APK STRUCTURE
+        # ----------------------------------------------------
 
-    except Exception:
-        pass
+        try:
+
+            with zipfile.ZipFile(apk_path, "r") as apk:
+
+                names = apk.namelist()
+
+                result["files"] = names[:100]
+
+                if "AndroidManifest.xml" not in names:
+                    result["reason"].append(
+                        "AndroidManifest.xml missing"
+                    )
+                    result["risk_score"] += 3
+                else:
+                    result["valid_apk"] = True
+
+                if not any(
+                    name.startswith("classes")
+                    and name.endswith(".dex")
+                    for name in names
+                ):
+                    result["reason"].append(
+                        "classes.dex missing"
+                    )
+                    result["risk_score"] += 2
+
+                # ------------------------------------------------
+                # Scan APK binary content for permission names.
+                # This is intentionally lightweight and does not
+                # require pyaxmlparser.
+                # ------------------------------------------------
+
+                permission_text = ""
+
+                try:
+
+                    manifest_data = apk.read(
+                        "AndroidManifest.xml"
+                    )
+
+                    permission_text = manifest_data.decode(
+                        "latin-1",
+                        errors="ignore"
+                    )
+
+                except Exception:
+                    permission_text = ""
+
+                for permission, score in SUSPICIOUS_PERMISSIONS.items():
+
+                    if permission in permission_text:
+
+                        result["permissions"].append(
+                            permission
+                        )
+
+                        result["risk_score"] += score
+
+        except zipfile.BadZipFile:
+
+            result["reason"].append(
+                "Invalid APK/ZIP structure"
+            )
+
+            result["risk_score"] += 5
+
+        except Exception as exc:
+
+            result["reason"].append(
+                "APK analysis error: " + str(exc)
+            )
+
+            result["risk_score"] += 5
+
+        # ----------------------------------------------------
+        # FINAL CLASSIFICATION
+        # ----------------------------------------------------
+
+        if result["risk_score"] >= 8:
+            result["suspicious"] = True
+
+        return result
+
+
+# ============================================================
+# GENERAL FILE ANALYZER
+# ============================================================
+
+def analyze_file(file_path):
+
+    result = {
+        "file": file_path,
+        "sha256": None,
+        "confirmed_malware": False,
+        "suspicious": False,
+        "risk_score": 0,
+        "reason": [],
+    }
+
+    if not os.path.isfile(file_path):
+        return result
+
+    file_hash = sha256_file(file_path)
+
+    result["sha256"] = file_hash
+
+    if file_hash and file_hash.lower() in KNOWN_MALWARE_HASHES:
+
+        result["confirmed_malware"] = True
+        result["suspicious"] = True
+        result["risk_score"] = 10
+
+        result["reason"].append(
+            "Known malicious SHA-256 hash"
+        )
+
+        return result
+
+    # --------------------------------------------------------
+    # APK
+    # --------------------------------------------------------
+
+    if file_path.lower().endswith(".apk"):
+
+        apk_result = APKAnalyzer.analyze(file_path)
+
+        result.update(apk_result)
+
+        return result
+
+    # --------------------------------------------------------
+    # Suspicious executable extensions
+    # --------------------------------------------------------
+
+    suspicious_extensions = {
+        ".exe",
+        ".scr",
+        ".bat",
+        ".cmd",
+        ".vbs",
+        ".ps1",
+        ".pif",
+    }
+
+    extension = os.path.splitext(file_path)[1].lower()
+
+    if extension in suspicious_extensions:
+
+        result["suspicious"] = True
+        result["risk_score"] += 4
+
+        result["reason"].append(
+            "Suspicious executable extension"
+        )
+
+    return result
 
 
 # ============================================================
 # HISTORY
 # ============================================================
 
-def get_history():
-
-    return load_json(
-        HISTORY_FILE,
-        []
-    )
-
-
-def add_history(result):
-
-    history = get_history()
-
-    history.insert(
-        0,
-        result
-    )
-
-    history = history[:500]
-
-    save_json(
-        HISTORY_FILE,
-        history
-    )
-
-
-# ============================================================
-# MONITOR CACHE
-# ============================================================
-
-def load_cache():
-
-    return load_json(
-        CACHE_FILE,
-        {}
-    )
-
-
-def save_cache(cache):
-
-    save_json(
-        CACHE_FILE,
-        cache
-    )
-
-
-# ============================================================
-# QUARANTINE
-# ============================================================
-
-def quarantine(result):
-
-    result["quarantined"] = False
-
-    source = result.get("path")
-
-    if not source:
-        return result
+def load_history():
 
     try:
 
-        source_path = Path(source)
+        if not os.path.exists(HISTORY_FILE):
+            return []
 
-        if not source_path.exists():
-            return result
+        with open(
+            HISTORY_FILE,
+            "r",
+            encoding="utf-8"
+        ) as f:
 
-        filename = source_path.name
+            data = json.load(f)
 
-        timestamp = int(time.time())
-
-        destination = (
-            QUARANTINE_DIR
-            / f"{timestamp}_{filename}.quarantine"
-        )
-
-        shutil.move(
-            str(source_path),
-            str(destination)
-        )
-
-        result["quarantined"] = True
-
-        result["quarantine_path"] = str(
-            destination
-        )
+            if isinstance(data, list):
+                return data
 
     except Exception:
+        pass
 
-        result["quarantined"] = False
-
-    return result
+    return []
 
 
-# ============================================================
-# FILE SCANNER
-# ============================================================
+def save_history(entry):
 
-def scan_one_file(path):
+    history = load_history()
 
-    path = str(path)
+    history.insert(0, entry)
 
-    name = os.path.basename(path)
-
-    result = {
-        "time": datetime.now().strftime(
-            "%Y-%m-%d %H:%M:%S"
-        ),
-        "name": name,
-        "path": path,
-        "sha256": "",
-        "verdict": "UNKNOWN",
-        "quarantined": False,
-    }
+    # Keep last 100 records.
+    history = history[:100]
 
     try:
 
-        if not os.path.isfile(path):
+        with open(
+            HISTORY_FILE,
+            "w",
+            encoding="utf-8"
+        ) as f:
 
-            result["verdict"] = "UNREADABLE"
-
-            return result
-
-        sha256 = calculate_sha256(
-            path
-        )
-
-        result["sha256"] = sha256
-
-        if sha256 in KNOWN_MALWARE_HASHES:
-
-            result["verdict"] = (
-                "CONFIRMED_MALWARE"
+            json.dump(
+                history,
+                f,
+                indent=2,
+                ensure_ascii=False
             )
-
-        else:
-
-            result["verdict"] = "CLEAN"
 
     except Exception:
-
-        result["verdict"] = "UNREADABLE"
-
-    return result
+        pass
 
 
 # ============================================================
-# ROUNDED PANEL
+# ANDROID STORAGE PATHS
 # ============================================================
 
-class Panel(BoxLayout):
+def get_scan_paths():
 
-    def __init__(
-        self,
-        **kwargs
-    ):
+    paths = []
 
-        super().__init__(**kwargs)
+    candidates = [
+        "/storage/emulated/0",
+        "/sdcard",
+    ]
 
-        with self.canvas.before:
+    for path in candidates:
 
-            Color(*PANEL)
+        if os.path.exists(path):
 
-            self.bg = RoundedRectangle(
-                pos=self.pos,
-                size=self.size,
-                radius=[dp(14)]
+            if path not in paths:
+                paths.append(path)
+
+    # Application directory as fallback.
+    if BASE_DIR not in paths:
+        paths.append(BASE_DIR)
+
+    return paths
+
+
+# ============================================================
+# SCANNER
+# ============================================================
+
+class Scanner:
+
+    def __init__(self, callback):
+
+        self.callback = callback
+        self.stop_requested = False
+
+    def stop(self):
+
+        self.stop_requested = True
+
+    def scan(self):
+
+        started = time.time()
+
+        files_scanned = 0
+        threats = 0
+        suspicious = 0
+
+        threat_results = []
+
+        paths = get_scan_paths()
+
+        # ----------------------------------------------------
+        # Collect files
+        # ----------------------------------------------------
+
+        all_files = []
+
+        for root_path in paths:
+
+            if self.stop_requested:
+                break
+
+            try:
+
+                for root, dirs, files in os.walk(
+                    root_path,
+                    topdown=True
+                ):
+
+                    if self.stop_requested:
+                        break
+
+                    # Avoid inaccessible/system directories.
+                    dirs[:] = [
+                        d for d in dirs
+                        if d not in {
+                            ".cache",
+                            ".thumbnails",
+                        }
+                    ]
+
+                    for filename in files:
+
+                        if self.stop_requested:
+                            break
+
+                        full_path = os.path.join(
+                            root,
+                            filename
+                        )
+
+                        all_files.append(full_path)
+
+            except Exception:
+                continue
+
+        total = len(all_files)
+
+        if total == 0:
+
+            self.callback(
+                "done",
+                {
+                    "files": 0,
+                    "threats": 0,
+                    "suspicious": 0,
+                    "time": time.time() - started,
+                    "results": [],
+                }
             )
 
-        self.bind(
-            pos=self.update_bg,
-            size=self.update_bg
-        )
+            return
 
-    def update_bg(
-        self,
-        *_args
-    ):
+        # ----------------------------------------------------
+        # Analyze
+        # ----------------------------------------------------
 
-        self.bg.pos = self.pos
-        self.bg.size = self.size
+        for index, file_path in enumerate(all_files):
 
+            if self.stop_requested:
+                break
 
-# ============================================================
-# ACTION BUTTON
-# ============================================================
+            result = analyze_file(file_path)
 
-class ActionButton(Button):
+            files_scanned += 1
 
-    def __init__(
-        self,
-        accent=CYAN,
-        **kwargs
-    ):
+            if result.get("confirmed_malware"):
+                threats += 1
+                threat_results.append(result)
 
-        super().__init__(**kwargs)
+            elif result.get("suspicious"):
+                suspicious += 1
+                threat_results.append(result)
 
-        self.accent = accent
+            progress = (
+                (index + 1) / total
+            ) * 100
 
-        self.color = WHITE
-
-        self.background_normal = ""
-
-        self.background_down = ""
-
-        self.background_color = (
-            0,
-            0,
-            0,
-            0
-        )
-
-        with self.canvas.before:
-
-            Color(*self.accent)
-
-            self.rectangle = RoundedRectangle(
-                pos=self.pos,
-                size=self.size,
-                radius=[dp(12)]
+            self.callback(
+                "progress",
+                {
+                    "progress": progress,
+                    "files": files_scanned,
+                    "threats": threats,
+                    "suspicious": suspicious,
+                    "current": file_path,
+                }
             )
 
-        self.bind(
-            pos=self.update_bg,
-            size=self.update_bg
+        elapsed = time.time() - started
+
+        self.callback(
+            "done",
+            {
+                "files": files_scanned,
+                "threats": threats,
+                "suspicious": suspicious,
+                "time": elapsed,
+                "results": threat_results,
+            }
         )
 
-    def update_bg(
-        self,
-        *_args
-    ):
-
-        self.rectangle.pos = self.pos
-        self.rectangle.size = self.size
-
 
 # ============================================================
-# SECURITY GAUGE
+# UI
 # ============================================================
 
-class SecurityGauge(Widget):
+class AntivirusUI(BoxLayout):
 
-    value = NumericProperty(0)
-
-    def __init__(
-        self,
-        **kwargs
-    ):
-
-        super().__init__(**kwargs)
-
-        self.status = "READY"
-
-        self.bind(
-            value=self.redraw,
-            pos=self.redraw,
-            size=self.redraw
-        )
-
-    def set_value(
-        self,
-        value,
-        status
-    ):
-
-        self.value = max(
-            0,
-            min(100, value)
-        )
-
-        self.status = status
-
-        self.redraw()
-
-    def redraw(
-        self,
-        *_args
-    ):
-
-        self.canvas.clear()
-
-        with self.canvas:
-
-            # Outer circle
-            Color(
-                0.08,
-                0.12,
-                0.16,
-                1
-            )
-
-            Line(
-                circle=(
-                    self.center_x,
-                    self.center_y,
-                    min(
-                        self.width,
-                        self.height
-                    ) / 2.6
-                ),
-                width=dp(10)
-            )
-
-            # Progress
-            if self.status == "Threat Found":
-
-                Color(*RED)
-
-            elif self.status == "Safe":
-
-                Color(*GREEN)
-
-            else:
-
-                Color(*CYAN)
-
-            Line(
-                circle=(
-                    self.center_x,
-                    self.center_y,
-                    min(
-                        self.width,
-                        self.height
-                    ) / 2.6,
-                    0,
-                    self.value * 3.6
-                ),
-                width=dp(10)
-            )
-
-
-# ============================================================
-# MAIN ANTIVIRUS SCREEN
-# ============================================================
-
-class AntivirusScreen(BoxLayout):
-
-    def __init__(
-        self,
-        **kwargs
-    ):
+    def __init__(self, **kwargs):
 
         super().__init__(
             orientation="vertical",
-            spacing=dp(8),
-            padding=dp(10),
+            padding=dp(15),
+            spacing=dp(10),
             **kwargs
         )
 
-        self.scanning = False
+        # ----------------------------------------------------
+        # TITLE
+        # ----------------------------------------------------
 
-        self.monitor_busy = False
-
-        self.scan_start = 0
-
-        self.scanned_files = 0
-
-        self.threats = 0
-
-        self.last_scan_seconds = 0
-
-        self.monitor_cache = load_cache()
-
-        self.build_ui()
-
-        request_android_permissions()
-
-        Clock.schedule_interval(
-            self.monitor_tick,
-            MONITOR_INTERVAL
-        )
-
-    # ========================================================
-    # LABEL HELPER
-    # ========================================================
-
-    def label(
-        self,
-        text,
-        size,
-        color=WHITE,
-        **kwargs
-    ):
-
-        return Label(
-            text=text,
-            font_size=dp(size),
-            color=color,
-            halign="center",
-            valign="middle",
-            **kwargs
-        )
-
-    # ========================================================
-    # BUILD UI
-    # ========================================================
-
-    def build_ui(self):
-
-        # ====================================================
-        # HEADER
-        # ====================================================
-
-        header = BoxLayout(
-            orientation="vertical",
+        title = Label(
+            text="[b]King Taj 👑[/b]",
+            markup=True,
+            font_size=dp(28),
             size_hint_y=None,
-            height=dp(72)
+            height=dp(55)
         )
 
-        header.add_widget(
-            self.label(
-                "KING TAJ 👑",
-                15,
-                YELLOW,
-                size_hint_y=None,
-                height=dp(28)
-            )
-        )
+        self.add_widget(title)
 
-        header.add_widget(
-            self.label(
-                APP_NAME,
-                22,
-                WHITE
-            )
-        )
-
-        self.add_widget(header)
-
-        # ====================================================
-        # SECURITY GAUGE
-        # ====================================================
-
-        gauge_panel = Panel(
-            orientation="vertical",
+        subtitle = Label(
+            text="V16 Antivirus Pro  •  Version 16.2",
+            font_size=dp(15),
             size_hint_y=None,
-            height=dp(220),
-            padding=dp(8)
+            height=dp(30)
         )
 
-        self.gauge = SecurityGauge(
+        self.add_widget(subtitle)
+
+        # ----------------------------------------------------
+        # STATUS
+        # ----------------------------------------------------
+
+        self.status = Label(
+            text="System Ready",
+            font_size=dp(18),
             size_hint_y=None,
-            height=dp(150)
+            height=dp(45)
         )
 
-        gauge_panel.add_widget(
-            self.gauge
-        )
+        self.add_widget(self.status)
 
-        self.percent_label = self.label(
-            "0%",
-            20,
-            CYAN,
+        # ----------------------------------------------------
+        # PROGRESS
+        # ----------------------------------------------------
+
+        self.progress = ProgressBar(
+            max=100,
+            value=0,
             size_hint_y=None,
-            height=dp(35)
+            height=dp(25)
         )
 
-        gauge_panel.add_widget(
-            self.percent_label
-        )
+        self.add_widget(self.progress)
 
-        self.add_widget(
-            gauge_panel
-        )
-
-        # ====================================================
-        # HEALTH
-        # ====================================================
-
-        health_panel = Panel(
-            orientation="vertical",
+        self.progress_label = Label(
+            text="0%",
             size_hint_y=None,
-            height=dp(100),
-            padding=dp(10)
+            height=dp(30)
         )
 
-        self.health_label = self.label(
-            "SYSTEM HEALTH",
-            12,
-            GRAY
-        )
+        self.add_widget(self.progress_label)
 
-        self.safe_label = self.label(
-            "Ready to scan",
-            22,
-            GREEN
-        )
+        # ----------------------------------------------------
+        # STATISTICS
+        # ----------------------------------------------------
 
-        health_panel.add_widget(
-            self.health_label
-        )
-
-        health_panel.add_widget(
-            self.safe_label
-        )
-
-        self.add_widget(
-            health_panel
-        )
-
-        # ====================================================
-        # DEVICE STATUS
-        # ====================================================
-
-        status_panel = Panel(
-            orientation="horizontal",
+        self.stats = Label(
+            text=(
+                "Files scanned: 0\n"
+                "Threats: 0\n"
+                "Suspicious: 0"
+            ),
+            font_size=dp(16),
             size_hint_y=None,
-            height=dp(82),
-            padding=dp(8)
+            height=dp(80)
         )
 
-        status_left = BoxLayout(
-            orientation="vertical"
-        )
+        self.add_widget(self.stats)
 
-        status_left.add_widget(
-            self.label(
-                "DEVICE STATUS",
-                11,
-                GRAY
-            )
-        )
-
-        self.device_status = self.label(
-            "READY",
-            16,
-            GREEN
-        )
-
-        status_left.add_widget(
-            self.device_status
-        )
-
-        status_right = BoxLayout(
-            orientation="vertical"
-        )
-
-        status_right.add_widget(
-            self.label(
-                "THREATS",
-                11,
-                GRAY
-            )
-        )
-
-        self.device_threat = self.label(
-            "No Threats",
-            16,
-            GREEN
-        )
-
-        status_right.add_widget(
-            self.device_threat
-        )
-
-        status_panel.add_widget(
-            status_left
-        )
-
-        status_panel.add_widget(
-            status_right
-        )
-
-        self.add_widget(
-            status_panel
-        )
-
-        # ====================================================
+        # ----------------------------------------------------
         # SCAN BUTTON
-        # ====================================================
+        # ----------------------------------------------------
 
-        self.scan_button = ActionButton(
-            text="SCAN DEVICE\nFull System Scan",
-            accent=CYAN,
+        self.scan_button = Button(
+            text="🔍  SCAN DEVICE",
+            font_size=dp(20),
             size_hint_y=None,
-            height=dp(70),
-            font_size=dp(16)
+            height=dp(60)
         )
 
         self.scan_button.bind(
-            on_press=self.start_full_scan
+            on_release=self.start_scan
         )
 
-        self.add_widget(
-            self.scan_button
-        )
+        self.add_widget(self.scan_button)
 
-        # ====================================================
-        # LAST SCAN
-        # ====================================================
-
-        last_panel = Panel(
-            orientation="vertical",
-            padding=dp(10),
-            size_hint_y=None,
-            height=dp(125)
-        )
-
-        self.last_result = self.label(
-            "No scan performed",
-            13,
-            WHITE
-        )
-
-        self.files_label = self.label(
-            "Files Scanned\n0",
-            13,
-            CYAN
-        )
-
-        self.time_label = self.label(
-            "Scan Time\n--:--",
-            13,
-            YELLOW
-        )
-
-        last_panel.add_widget(
-            self.last_result
-        )
-
-        last_panel.add_widget(
-            self.files_label
-        )
-
-        last_panel.add_widget(
-            self.time_label
-        )
-
-        self.add_widget(
-            last_panel
-        )
-
-        # ====================================================
+        # ----------------------------------------------------
         # HISTORY BUTTON
-        # ====================================================
+        # ----------------------------------------------------
 
-        self.history_button = ActionButton(
-            text="▣  VIEW HISTORY   ›",
-            accent=PURPLE,
+        history_button = Button(
+            text="📋  SCAN HISTORY",
+            font_size=dp(17),
             size_hint_y=None,
-            height=dp(58)
+            height=dp(50)
         )
 
-        self.history_button.bind(
-            on_press=self.show_history
+        history_button.bind(
+            on_release=self.show_history
         )
 
-        self.add_widget(
-            self.history_button
-        )
+        self.add_widget(history_button)
 
-        # ====================================================
-        # LIVE EVENTS
-        # ====================================================
+        # ----------------------------------------------------
+        # RESULT AREA
+        # ----------------------------------------------------
 
-        live_panel = Panel(
-            orientation="vertical",
-            padding=dp(10),
+        scroll = ScrollView()
+
+        self.result_label = Label(
+            text="No scan performed yet.",
             size_hint_y=None,
-            height=dp(112)
+            valign="top",
+            halign="left"
         )
 
-        self.live_title = self.label(
-            "REAL-TIME PROTECTION\n(Auto Scan New Files)",
-            13,
-            GREEN,
-            size_hint_y=None,
-            height=dp(35)
-        )
-
-        self.live_event = self.label(
-            "✓ Protection active\n"
-            "Waiting for new or changed files...",
-            13,
-            WHITE
-        )
-
-        live_panel.add_widget(
-            self.live_title
-        )
-
-        live_panel.add_widget(
-            self.live_event
-        )
-
-        self.add_widget(
-            live_panel
-        )
-
-        # ====================================================
-        # NAVIGATION
-        # ====================================================
-
-        nav = BoxLayout(
-            spacing=dp(4),
-            size_hint_y=None,
-            height=dp(58)
-        )
-
-        for name, callback in (
-            ("HOME", self.home),
-            ("SCAN", self.start_full_scan),
-            (
-                "HISTORY",
-                self.show_history
-            ),
-            (
-                "QUARANTINE",
-                self.show_quarantine
-            ),
-            (
-                "SETTINGS",
-                self.show_info
-            ),
-        ):
-
-            b = Button(
-                text=name,
-                font_size=dp(9),
-                color=WHITE,
-                background_normal="",
-                background_color=(
-                    0.02,
-                    0.06,
-                    0.09,
-                    1
-                )
+        self.result_label.bind(
+            texture_size=self.result_label.setter(
+                "size"
             )
+        )
 
-            b.bind(
-                on_press=callback
-            )
+        scroll.add_widget(
+            self.result_label
+        )
 
-            nav.add_widget(b)
+        self.add_widget(scroll)
 
-        self.add_widget(nav)
+        self.scanner = None
 
     # ========================================================
-    # FULL SCAN
+    # START SCAN
     # ========================================================
 
-    def start_full_scan(
-        self,
-        *_args
-    ):
+    def start_scan(self, instance):
 
-        if self.scanning:
+        if self.scanner is not None:
             return
-
-        request_android_permissions()
-
-        roots = scan_roots()
-
-        if not roots:
-
-            self.show_scan_error(
-                "No readable storage location was found."
-            )
-
-            return
-
-        self.scanning = True
-
-        self.scan_start = time.time()
-
-        self.scanned_files = 0
-
-        self.threats = 0
 
         self.scan_button.disabled = True
 
-        self.scan_button.text = (
-            "SCANNING...\nPlease wait"
+        self.progress.value = 0
+
+        self.progress_label.text = "0%"
+
+        self.status.text = "Scanning..."
+
+        self.stats.text = (
+            "Files scanned: 0\n"
+            "Threats: 0\n"
+            "Suspicious: 0"
         )
 
-        self.gauge.set_value(
-            0,
-            "Scanning"
-        )
+        self.result_label.text = ""
 
-        self.percent_label.text = "0%"
-
-        self.health_label.text = (
-            "SYSTEM HEALTH"
-        )
-
-        self.safe_label.text = (
-            "Scanning..."
-        )
-
-        self.safe_label.color = YELLOW
-
-        self.device_status.text = (
-            "SCANNING"
-        )
-
-        self.device_status.color = YELLOW
-
-        self.device_threat.text = (
-            "Security scan running"
-        )
-
-        self.last_result.text = (
-            "Scanning..."
-        )
-
-        self.files_label.text = (
-            "Files Scanned\n0"
-        )
-
-        self.time_label.text = (
-            "Scan Time\n00:00"
+        self.scanner = Scanner(
+            self.scan_callback
         )
 
         thread = threading.Thread(
-            target=self.scan_worker,
-            args=(roots,),
+            target=self.scanner.scan,
             daemon=True
         )
 
         thread.start()
 
     # ========================================================
-    # SCAN WORKER
+    # CALLBACK
     # ========================================================
 
-    def scan_worker(
-        self,
-        roots
-    ):
+    def scan_callback(self, event, data):
 
-        try:
+        Clock.schedule_once(
+            lambda dt: self._update_ui(
+                event,
+                data
+            )
+        )
 
-            files = []
+    # ========================================================
+    # UI UPDATE
+    # ========================================================
 
-            for root in roots:
+    def _update_ui(self, event, data):
 
-                for path in iter_files(root):
+        if event == "progress":
 
-                    files.append(path)
+            value = data["progress"]
 
-            total = max(
-                1,
-                len(files)
+            self.progress.value = value
+
+            self.progress_label.text = (
+                f"{value:.1f}%"
             )
 
-            for index, path in enumerate(
-                files,
-                1
-            ):
+            self.status.text = (
+                "Scanning: "
+                + os.path.basename(
+                    data["current"]
+                )[:40]
+            )
 
-                if not self.scanning:
-                    break
+            self.stats.text = (
+                f"Files scanned: {data['files']}\n"
+                f"Threats: {data['threats']}\n"
+                f"Suspicious: {data['suspicious']}"
+            )
 
-                result = scan_one_file(
-                    path
+        elif event == "done":
+
+            self.scanner = None
+
+            self.scan_button.disabled = False
+
+            self.progress.value = 100
+
+            self.progress_label.text = "100%"
+
+            files = data["files"]
+            threats = data["threats"]
+            suspicious = data["suspicious"]
+            elapsed = data["time"]
+
+            self.stats.text = (
+                f"Files scanned: {files}\n"
+                f"Threats: {threats}\n"
+                f"Suspicious: {suspicious}"
+            )
+
+            if threats > 0:
+
+                self.status.text = (
+                    "⚠️ THREATS DETECTED"
                 )
 
-                self.scanned_files = index
+            elif suspicious > 0:
 
-                if (
-                    result["verdict"]
-                    == "CONFIRMED_MALWARE"
-                ):
-
-                    self.threats += 1
-
-                    quarantine(
-                        result
-                    )
-
-                add_history(
-                    result
+                self.status.text = (
+                    "⚠️ Suspicious files found"
                 )
 
-                progress = int(
-                    index * 100 / total
+            else:
+
+                self.status.text = (
+                    "✓ No known threats found"
                 )
 
-                Clock.schedule_once(
-                    lambda dt,
-                    r=result,
-                    p=progress:
-                    self.scan_ui_update(
-                        r,
-                        p
-                    )
+            # ------------------------------------------------
+            # Result text
+            # ------------------------------------------------
+
+            lines = [
+                "========== SCAN RESULT ==========",
+                f"Files scanned : {files}",
+                f"Threats       : {threats}",
+                f"Suspicious    : {suspicious}",
+                f"Scan time     : {elapsed:.1f} seconds",
+                "",
+            ]
+
+            for result in data["results"][:30]:
+
+                file_name = result.get(
+                    "file",
+                    "Unknown"
                 )
 
-            elapsed = (
-                time.time()
-                - self.scan_start
-            )
-
-            Clock.schedule_once(
-                lambda dt,
-                e=elapsed:
-                self.finish_scan(e)
-            )
-
-        except Exception as e:
-
-            Clock.schedule_once(
-                lambda dt,
-                msg=str(e):
-                self.show_scan_error(msg)
-            )
-
-    # ========================================================
-    # SCAN UI
-    # ========================================================
-
-    def scan_ui_update(
-        self,
-        result,
-        progress
-    ):
-
-        self.gauge.set_value(
-            progress,
-            (
-                "Threat Found"
-                if result["verdict"]
-                == "CONFIRMED_MALWARE"
-                else "Scanning"
-            )
-        )
-
-        self.percent_label.text = (
-            f"{progress}%"
-        )
-
-        self.files_label.text = (
-            f"Files Scanned\n"
-            f"{self.scanned_files:,}"
-        )
-
-        if (
-            result["verdict"]
-            == "CONFIRMED_MALWARE"
-        ):
-
-            self.safe_label.text = (
-                "Threat Found"
-            )
-
-            self.safe_label.color = RED
-
-            self.device_status.text = (
-                "THREAT"
-            )
-
-            self.device_status.color = RED
-
-            self.device_threat.text = (
-                f"{self.threats} confirmed"
-            )
-
-            self.last_result.text = (
-                "CONFIRMED MALWARE\n"
-                + result["name"]
-            )
-
-            self.last_result.color = RED
-
-            self.live_event.text = (
-                "⚠ CONFIRMED MALWARE DETECTED\n"
-                + result["name"]
-                + "\nFile quarantined"
-            )
-
-            self.live_event.color = RED
-
-            notify_user(
-                APP_NAME,
-                "Confirmed malware detected and quarantined."
-            )
-
-        else:
-
-            self.last_result.text = (
-                "Scanning\n"
-                + result["name"]
-            )
-
-            self.last_result.color = GREEN
-
-    # ========================================================
-    # FINISH SCAN
-    # ========================================================
-
-    def finish_scan(
-        self,
-        elapsed
-    ):
-
-        if not self.scanning:
-            return
-
-        self.scanning = False
-
-        self.last_scan_seconds = int(
-            elapsed
-        )
-
-        self.scan_button.disabled = False
-
-        self.scan_button.text = (
-            "SCAN DEVICE\nFull System Scan"
-        )
-
-        self.gauge.set_value(
-            100,
-            (
-                "Threat Found"
-                if self.threats
-                else "Safe"
-            )
-        )
-
-        self.percent_label.text = "100%"
-
-        self.files_label.text = (
-            f"Files Scanned\n"
-            f"{self.scanned_files:,}"
-        )
-
-        mins = (
-            self.last_scan_seconds
-            // 60
-        )
-
-        secs = (
-            self.last_scan_seconds
-            % 60
-        )
-
-        self.time_label.text = (
-            f"Scan Time\n"
-            f"{mins:02d}:{secs:02d}"
-        )
-
-        if self.threats:
-
-            self.safe_label.text = (
-                "Threat Found"
-            )
-
-            self.safe_label.color = RED
-
-            self.device_status.text = (
-                "THREAT"
-            )
-
-            self.device_status.color = RED
-
-            self.device_threat.text = (
-                f"{self.threats} confirmed"
-            )
-
-            self.last_result.text = (
-                f"{self.threats} "
-                "CONFIRMED MALWARE\n"
-                "Quarantine completed "
-                "where possible"
-            )
-
-            self.last_result.color = RED
-
-        else:
-
-            self.safe_label.text = (
-                "Safe"
-            )
-
-            self.safe_label.color = GREEN
-
-            self.device_status.text = (
-                "SECURE"
-            )
-
-            self.device_status.color = GREEN
-
-            self.device_threat.text = (
-                "No Threats Found"
-            )
-
-            self.last_result.text = (
-                "✓ No Threat Found\n"
-                "Your accessible storage is safe"
-            )
-
-            self.last_result.color = GREEN
-
-            self.live_event.text = (
-                "✓ Scan completed\n"
-                "No verified malware found"
-            )
-
-            self.live_event.color = GREEN
-
-    # ========================================================
-    # SCAN ERROR
-    # ========================================================
-
-    def show_scan_error(
-        self,
-        message
-    ):
-
-        self.scanning = False
-
-        self.scan_button.disabled = False
-
-        self.scan_button.text = (
-            "SCAN DEVICE\nFull System Scan"
-        )
-
-        self.device_status.text = (
-            "SCAN ERROR"
-        )
-
-        self.device_status.color = RED
-
-        self.device_threat.text = (
-            "See details"
-        )
-
-        self.safe_label.text = (
-            "Scan Error"
-        )
-
-        self.safe_label.color = RED
-
-        self.live_event.text = (
-            "Scan stopped safely\n"
-            + str(message)[:200]
-        )
-
-        self.live_event.color = RED
-
-    # ========================================================
-    # MONITOR
-    # ========================================================
-
-    def monitor_tick(
-        self,
-        *_args
-    ):
-
-        if (
-            self.scanning
-            or self.monitor_busy
-        ):
-            return
-
-        roots = scan_roots()
-
-        if not roots:
-            return
-
-        self.monitor_busy = True
-
-        thread = threading.Thread(
-            target=self.monitor_worker,
-            args=(roots,),
-            daemon=True
-        )
-
-        thread.start()
-
-    # ========================================================
-    # MONITOR WORKER
-    # ========================================================
-
-    def monitor_worker(
-        self,
-        roots
-    ):
-
-        try:
-
-            new_files = []
-
-            for root in roots:
-
-                for path in iter_files(root):
-
-                    if (
-                        len(new_files)
-                        >=
-                        MAX_MONITOR_NEW_FILES_PER_CYCLE
-                    ):
-                        break
-
-                    sig = file_signature(
-                        path
-                    )
-
-                    if not sig:
-                        continue
-
-                    key = os.path.abspath(
-                        path
-                    )
-
-                    old = self.monitor_cache.get(
-                        key
-                    )
-
-                    if (
-                        old is not None
-                        and old != sig
-                    ):
-
-                        new_files.append(
-                            path
+                lines.append(
+                    "File: " + file_name
+                )
+
+                lines.append(
+                    "SHA256: "
+                    + str(
+                        result.get(
+                            "sha256",
+                            "N/A"
                         )
+                    )
+                )
 
-                    self.monitor_cache[key] = sig
+                lines.append(
+                    "Risk score: "
+                    + str(
+                        result.get(
+                            "risk_score",
+                            0
+                        )
+                    )
+                )
 
-                if (
-                    len(new_files)
-                    >=
-                    MAX_MONITOR_NEW_FILES_PER_CYCLE
+                for reason in result.get(
+                    "reason",
+                    []
                 ):
-                    break
 
-            save_cache(
-                self.monitor_cache
+                    lines.append(
+                        "Reason: " + reason
+                    )
+
+                lines.append("")
+
+            self.result_label.text = "\n".join(
+                lines
             )
 
-            for path in new_files:
+            # ------------------------------------------------
+            # Save history
+            # ------------------------------------------------
 
-                result = scan_one_file(
-                    path
-                )
+            history_entry = {
+                "date": datetime.now().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                "files": files,
+                "threats": threats,
+                "suspicious": suspicious,
+                "time": round(elapsed, 2),
+            }
 
-                add_history(
-                    result
-                )
-
-                Clock.schedule_once(
-                    lambda dt,
-                    r=result:
-                    self.live_scan_result(r)
-                )
-
-        except Exception:
-            pass
-
-        finally:
-
-            Clock.schedule_once(
-                lambda dt:
-                self.clear_monitor_busy()
-            )
-
-    # ========================================================
-    # CLEAR MONITOR
-    # ========================================================
-
-    def clear_monitor_busy(
-        self
-    ):
-
-        self.monitor_busy = False
-
-    # ========================================================
-    # LIVE RESULT
-    # ========================================================
-
-    def live_scan_result(
-        self,
-        result
-    ):
-
-        if (
-            result["verdict"]
-            == "CONFIRMED_MALWARE"
-        ):
-
-            self.threats += 1
-
-            quarantine(
-                result
-            )
-
-            self.device_status.text = (
-                "THREAT"
-            )
-
-            self.device_status.color = RED
-
-            self.device_threat.text = (
-                "New confirmed threat"
-            )
-
-            self.live_event.text = (
-                "⚠ THREAT DETECTED\n"
-                + result["name"]
-                + "\nFile quarantined"
-            )
-
-            self.live_event.color = RED
-
-            notify_user(
-                APP_NAME,
-                "New confirmed malware detected and quarantined."
-            )
-
-        else:
-
-            self.live_event.text = (
-                "✓ New File Detected & Scanned\n"
-                + result["name"]
-                + "\nNo verified malware found"
-            )
-
-            self.live_event.color = GREEN
+            save_history(history_entry)
 
     # ========================================================
     # HISTORY
     # ========================================================
 
-    def show_history(
-        self,
-        *_args
-    ):
+    def show_history(self, instance):
 
-        history = get_history()
-
-        box = BoxLayout(
-            orientation="vertical",
-            spacing=dp(8),
-            padding=dp(10)
-        )
-
-        scroll = ScrollView()
-
-        rows = []
+        history = load_history()
 
         if not history:
 
-            rows.append(
-                "No scan history yet."
-            )
+            text = "No scan history available."
 
-        for i, item in enumerate(
-            history[:120],
-            1
-        ):
+        else:
 
-            verdict = item.get(
-                "verdict",
-                "UNKNOWN"
-            )
-
-            rows.append(
-                f"{i}. "
-                f"{item.get('time', '-')}\n"
-                f"   File: "
-                f"{item.get('name', '-')}\n"
-                f"   Verdict: "
-                f"{verdict}\n"
-                f"   SHA-256: "
-                f"{item.get('sha256', '-')}\n"
-                f"   Quarantine: "
-                f"{item.get('quarantined', False)}\n"
-            )
-
-        text = Label(
-            text="\n".join(rows),
-            color=WHITE,
-            font_size=dp(12),
-            halign="left",
-            valign="top",
-            size_hint_y=None
-        )
-
-        text.bind(
-            texture_size=lambda obj,
-            size:
-            setattr(
-                obj,
-                "height",
-                size[1] + dp(20)
-            )
-        )
-
-        scroll.add_widget(
-            text
-        )
-
-        box.add_widget(
-            scroll
-        )
-
-        close = Button(
-            text="CLOSE",
-            size_hint_y=None,
-            height=dp(50)
-        )
-
-        box.add_widget(
-            close
-        )
-
-        popup = Popup(
-            title="SCAN HISTORY",
-            content=box,
-            size_hint=(0.94, 0.90)
-        )
-
-        close.bind(
-            on_press=popup.dismiss
-        )
-
-        popup.open()
-
-    # ========================================================
-    # QUARANTINE
-    # ========================================================
-
-    def show_quarantine(
-        self,
-        *_args
-    ):
-
-        try:
-
-            files = sorted(
-                QUARANTINE_DIR.iterdir(),
-                key=lambda p:
-                p.stat().st_mtime,
-                reverse=True
-            )
-
-        except Exception:
-
-            files = []
-
-        names = [
-            p.name
-            for p in files[:100]
-        ]
-
-        if not names:
-
-            names = [
-                "Quarantine is empty."
+            lines = [
+                "========== SCAN HISTORY ==========",
+                "",
             ]
 
-        box = BoxLayout(
-            orientation="vertical",
-            padding=dp(10),
-            spacing=dp(8)
-        )
+            for item in history[:50]:
 
-        scroll = ScrollView()
+                lines.append(
+                    f"Date: {item.get('date', 'N/A')}"
+                )
 
-        text = Label(
-            text="\n\n".join(names),
-            color=WHITE,
-            font_size=dp(13),
+                lines.append(
+                    f"Files: {item.get('files', 0)}"
+                )
+
+                lines.append(
+                    f"Threats: {item.get('threats', 0)}"
+                )
+
+                lines.append(
+                    f"Suspicious: "
+                    f"{item.get('suspicious', 0)}"
+                )
+
+                lines.append(
+                    f"Time: "
+                    f"{item.get('time', 0)} sec"
+                )
+
+                lines.append("")
+
+            text = "\n".join(lines)
+
+        popup_content = ScrollView()
+
+        label = Label(
+            text=text,
+            size_hint_y=None,
             halign="left",
-            valign="top",
-            size_hint_y=None
+            valign="top"
         )
 
-        text.bind(
-            texture_size=lambda obj,
-            size:
-            setattr(
-                obj,
-                "height",
-                size[1] + dp(20)
+        label.bind(
+            texture_size=label.setter(
+                "size"
             )
         )
 
-        scroll.add_widget(
-            text
-        )
+        popup_content.add_widget(label)
 
-        box.add_widget(
-            scroll
-        )
-
-        close = Button(
-            text="CLOSE",
-            size_hint_y=None,
-            height=dp(50)
-        )
-
-        box.add_widget(
-            close
-        )
-
-        popup = Popup(
-            title="QUARANTINE",
-            content=box,
-            size_hint=(0.94, 0.90)
-        )
-
-        close.bind(
-            on_press=popup.dismiss
-        )
-
-        popup.open()
-
-    # ========================================================
-    # HOME
-    # ========================================================
-
-    def home(
-        self,
-        *_args
-    ):
-
-        self.live_event.text = (
-            "✓ Protection active\n"
-            "Waiting for new or changed files..."
-        )
-
-        self.live_event.color = GREEN
-
-    # ========================================================
-    # SETTINGS / INFORMATION
-    # ========================================================
-
-    def show_info(
-        self,
-        *_args
-    ):
-
-        text = (
-            f"{APP_NAME} {VERSION}\n\n"
-
-            "Security baseline:\n"
-
-            "• SHA-256 exact IOC matching\n"
-            "• Confirmed-malware quarantine\n"
-            "• Scan history\n"
-            "• New/changed file monitoring\n"
-            "• Permission-safe file traversal\n\n"
-
-            "Important:\n"
-
-            "Android protected/private app data "
-            "may not be accessible to a normal "
-            "Python/Kivy application."
-        )
-
-        close = Button(
-            text="CLOSE",
-            size_hint_y=None,
-            height=dp(50)
-        )
-
-        box = BoxLayout(
-            orientation="vertical",
-            padding=dp(12)
-        )
-
-        box.add_widget(
-            Label(
-                text=text,
-                color=WHITE,
-                font_size=dp(13),
-                halign="left",
-                valign="top"
-            )
-        )
-
-        box.add_widget(
-            close
-        )
-
-        popup = Popup(
-            title="V16 SECURITY",
-            content=box,
-            size_hint=(0.92, 0.70)
-        )
-
-        close.bind(
-            on_press=popup.dismiss
-        )
-
-        popup.open()
+        Popup(
+            title="Scan History",
+            content=popup_content,
+            size_hint=(0.92, 0.85)
+        ).open()
 
 
 # ============================================================
@@ -1944,19 +925,16 @@ class AntivirusScreen(BoxLayout):
 
 class V16AntivirusApp(App):
 
+    title = APP_NAME
+
     def build(self):
 
-        self.title = (
-            f"{APP_NAME} {VERSION}"
-        )
-
-        return AntivirusScreen()
+        return AntivirusUI()
 
 
 # ============================================================
-# START
+# RUN
 # ============================================================
 
 if __name__ == "__main__":
-
     V16AntivirusApp().run()
