@@ -14,7 +14,7 @@ jobs:
     steps:
 
       # ==========================================
-      # ১. GitHub Repository থেকে Project নেওয়া
+      # ১. Repository থেকে Project নেওয়া
       # ==========================================
       - name: Repository Checkout
         uses: actions/checkout@v4
@@ -26,7 +26,7 @@ jobs:
       - name: Python সেটআপ
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11.16"
+          python-version: "3.11"
 
 
       # ==========================================
@@ -40,9 +40,9 @@ jobs:
 
 
       # ==========================================
-      # ৪. প্রয়োজনীয় Linux Package ইনস্টল
+      # ৪. Linux প্রয়োজনীয় Package ইনস্টল
       # ==========================================
-      - name: System Package ইনস্টল
+      - name: প্রয়োজনীয় Package ইনস্টল
         run: |
           sudo apt-get update
 
@@ -61,16 +61,15 @@ jobs:
 
 
       # ==========================================
-      # ৫. Python Build Package ইনস্টল
+      # ৫. Buildozer ইনস্টল
       # ==========================================
-      - name: Python Build Package ইনস্টল
+      - name: Buildozer ইনস্টল
         run: |
           python -m pip install --upgrade pip
 
           python -m pip install \
             buildozer==1.6.0 \
-            cython==0.29.37 \
-            virtualenv
+            cython==0.29.37
 
 
       # ==========================================
@@ -78,6 +77,7 @@ jobs:
       # ==========================================
       - name: Project পরীক্ষা
         run: |
+
           echo "=========================================="
           echo "PROJECT FILES"
           echo "=========================================="
@@ -86,44 +86,119 @@ jobs:
 
           echo
           echo "=========================================="
-          echo "PYTHON VERSION"
+          echo "PYTHON"
           echo "=========================================="
 
           python --version
 
           echo
           echo "=========================================="
-          echo "JAVA VERSION"
+          echo "JAVA"
           echo "=========================================="
 
           java -version
 
           echo
           echo "=========================================="
-          echo "BUILDOZER VERSION"
+          echo "BUILDOZER"
           echo "=========================================="
 
           buildozer --version
 
 
       # ==========================================
-      # ৭. main.py Syntax পরীক্ষা
+      # ৭. main.py পরীক্ষা
       # ==========================================
       - name: Python Syntax পরীক্ষা
         run: |
+
           python -m py_compile main.py
 
           echo
           echo "=========================================="
-          echo "main.py SYNTAX OK"
+          echo "main.py ঠিক আছে"
           echo "=========================================="
 
 
       # ==========================================
-      # ৮. পুরোনো Build পরিষ্কার করা
+      # ৮. GitHub Runner-এর Android SDK ব্যবহার
       # ==========================================
-      - name: পুরোনো Build পরিষ্কার
+      - name: Android SDK পরীক্ষা
         run: |
+
+          echo "=========================================="
+          echo "ANDROID SDK"
+          echo "=========================================="
+
+          echo "ANDROID_HOME:"
+          echo "$ANDROID_HOME"
+
+          echo
+          echo "ANDROID_SDK_ROOT:"
+          echo "$ANDROID_SDK_ROOT"
+
+          echo
+          echo "SDK packages:"
+
+          sdkmanager --list_installed || true
+
+          echo
+          echo "Build Tools:"
+
+          ls -la "$ANDROID_HOME/build-tools" || true
+
+          echo
+          echo "Platforms:"
+
+          ls -la "$ANDROID_HOME/platforms" || true
+
+          echo
+          echo "AIDL:"
+
+          find "$ANDROID_HOME/build-tools" \
+            -type f \
+            -name aidl \
+            -print || true
+
+
+      # ==========================================
+      # ৯. Android SDK License গ্রহণ
+      # ==========================================
+      - name: Android License গ্রহণ
+        run: |
+
+          echo "=========================================="
+          echo "ANDROID LICENSE"
+          echo "=========================================="
+
+          yes | sdkmanager --licenses || true
+
+
+      # ==========================================
+      # ১০. প্রয়োজনীয় Android SDK Component
+      # ==========================================
+      - name: Android SDK Component প্রস্তুত
+        run: |
+
+          echo "=========================================="
+          echo "ANDROID COMPONENTS"
+          echo "=========================================="
+
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+          echo
+          echo "Android SDK প্রস্তুত।"
+
+
+      # ==========================================
+      # ১১. পুরোনো Build পরিষ্কার
+      # ==========================================
+      - name: Build পরিষ্কার
+        run: |
+
           rm -rf .buildozer
           rm -rf bin
 
@@ -131,29 +206,35 @@ jobs:
 
 
       # ==========================================
-      # ৯. Buildozer প্রথমবার প্রস্তুত করা
+      # ১২. APK Build
       # ==========================================
-      - name: Buildozer প্রস্তুতি
+      - name: APK তৈরি
         run: |
+
           echo "=========================================="
-          echo "BUILDOZER PREPARATION"
+          echo "V16 ANTIVIRUS APK BUILD"
           echo "=========================================="
 
           buildozer -v android debug
 
 
       # ==========================================
-      # ১০. APK পরীক্ষা
+      # ১৩. APK পরীক্ষা
       # ==========================================
       - name: APK পরীক্ষা
         if: always()
         run: |
+
           echo
           echo "=========================================="
           echo "GENERATED APK"
           echo "=========================================="
 
-          if find bin -maxdepth 1 -type f -name "*.apk" | grep -q ".apk"; then
+          if find bin \
+            -maxdepth 1 \
+            -type f \
+            -name "*.apk" \
+            | grep -q ".apk"; then
 
             echo "APK সফলভাবে তৈরি হয়েছে।"
 
@@ -168,12 +249,20 @@ jobs:
             echo "ERROR: APK তৈরি হয়নি।"
 
             echo
-            echo "পুরো Project-এ APK খোঁজা হচ্ছে..."
+            echo "APK খোঁজা হচ্ছে:"
 
             find . \
               -type f \
               \( -name "*.apk" -o -name "*.aab" \) \
               -print
+
+            echo
+            echo "শেষ Build log-এর গুরুত্বপূর্ণ অংশ:"
+
+            find .buildozer \
+              -type f \
+              -name "*.log" \
+              -print 2>/dev/null | head -n 20 || true
 
             exit 1
 
@@ -181,7 +270,7 @@ jobs:
 
 
       # ==========================================
-      # ১১. APK Artifact Upload
+      # ১৪. APK Upload
       # ==========================================
       - name: APK Upload
         if: success()
