@@ -540,6 +540,92 @@ jobs:
           echo "Environment ready for Buildozer."
 
       # =====================================================
+      # 20. SDK Manager Compatibility Fix + APK Build
+      # =====================================================
+      - name: Fix SDK Manager and Build APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          echo "=========================================="
+          echo "SDK MANAGER COMPATIBILITY FIX"
+          echo "=========================================="
+
+          SDK="$ANDROID_HOME"
+
+          echo
+          echo "ANDROID_HOME:"
+          echo "$SDK"
+
+          echo
+          echo "Checking real sdkmanager..."
+
+          test -x "$SDK/cmdline-tools/latest/bin/sdkmanager"
+
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --version
+
+          echo
+          echo "Creating Buildozer-compatible SDK path..."
+
+          mkdir -p "$SDK/tools/bin"
+
+          ln -sf \
+            "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+            "$SDK/tools/bin/sdkmanager"
+
+          echo
+          echo "Checking compatibility path..."
+
+          test -x "$SDK/tools/bin/sdkmanager"
+
+          "$SDK/tools/bin/sdkmanager" --version
+
+          echo
+          echo "sdkmanager is ready."
+
+          echo
+          echo "=========================================="
+          echo "ANDROID SDK COMPONENTS"
+          echo "=========================================="
+
+          "$SDK/tools/bin/sdkmanager" --list | head -n 40 || true
+
+          echo
+          echo "=========================================="
+          echo "BUILD ENVIRONMENT"
+          echo "=========================================="
+
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+
+          echo
+          echo "NDK:"
+          test -d "$ANDROID_NDK_HOME"
+
+          grep "Pkg.Revision" \
+            "$ANDROID_NDK_HOME/source.properties"
+
+          echo
+          echo "Java:"
+          java -version
+
+          echo
+          echo "Python:"
+          python --version
+
+          echo
+          echo "Buildozer:"
+          python -m buildozer --version
+
+          echo
+          echo "=========================================="
+          echo "BUILDOZER BUILD"
+          echo "=========================================="
+
+          python -m buildozer -v android debug
+
+      # =====================================================
       # 20. Configure Final Android Environment
       # =====================================================
       - name: Configure Final Android Environment
@@ -594,38 +680,56 @@ jobs:
 
 
       # =====================================================
-      # 21. Verify Buildozer Configuration
+      # 21. Verify and Upload APK
       # =====================================================
-      - name: Verify Buildozer Configuration
+      - name: Verify and Upload APK
+        if: success()
         shell: bash
         run: |
           set -euxo pipefail
 
           echo "=========================================="
-          echo "VERIFY BUILDOZER CONFIGURATION"
+          echo "VERIFYING APK"
           echo "=========================================="
 
-          test -f buildozer.spec
+          echo
+          echo "APK files in bin/:"
+
+          find bin \
+            -maxdepth 1 \
+            -type f \
+            -name "*.apk" \
+            -print
 
           echo
-          echo "Buildozer settings:"
+          echo "Checking APK..."
 
-          grep -E \
-            '^(title|package.name|package.domain|source.dir|source.include_exts|version|requirements|android.api|android.minapi|android.ndk|android.ndk_path|android.sdk_path|android.ndk_api|android.skip_update|android.accept_sdk_license)' \
-            buildozer.spec || true
+          APK_COUNT=$(find bin \
+            -maxdepth 1 \
+            -type f \
+            -name "*.apk" \
+            | wc -l)
+
+          if [ "$APK_COUNT" -eq 0 ]; then
+            echo "ERROR: No APK found."
+            exit 1
+          fi
+
+          echo "APK count: $APK_COUNT"
 
           echo
-          echo "Checking required files..."
+          echo "APK details:"
 
-          test -f main.py
+          for APK in bin/*.apk; do
+            echo "------------------------------------------"
+            echo "File: $APK"
+            ls -lh "$APK"
+            file "$APK"
+            echo "------------------------------------------"
+          done
 
           echo
-          echo "main.py:"
-          ls -lh main.py
-
-          echo
-          echo "Buildozer configuration OK."
-
+          echo "APK BUILD SUCCESSFUL."
 
       # =====================================================
       # 22. Python Syntax Test
