@@ -5,6 +5,7 @@ package.name = v16antivirus
 package.domain = org.kingtaj
 
 source.dir = .
+
 source.include_exts = py,json,png,jpg,jpeg,kv,atlas
 
 version = 16.2
@@ -19,13 +20,17 @@ android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,POST_NOTIFICA
 android.api = 35
 android.minapi = 23
 
-android.archs = arm64-v8a,armeabi-v7a
+# প্রথম সফল APK তৈরির জন্য শুধু ARM64 ব্যবহার করা হচ্ছে
+android.archs = arm64-v8a
 
 android.private_storage = True
 android.allow_backup = False
 android.uses_cleartext_connection = False
 
+# Buildozer যে SDK ব্যবহার করবে
 android.sdk_path = /home/runner/.buildozer/android/platform/android-sdk
+
+# Buildozer যে NDK ব্যবহার করবে
 android.ndk_path = /home/runner/.buildozer/android/platform/android-ndk-r28c
 
 android.accept_sdk_license = True
