@@ -7,8 +7,11 @@ on:
 
   workflow_dispatch:
 
+
 jobs:
+
   build:
+
     runs-on: ubuntu-22.04
 
     steps:
@@ -35,7 +38,7 @@ jobs:
       - name: Java Setup
         uses: actions/setup-java@v5
         with:
-          distribution: temurin
+          distribution: "temurin"
           java-version: "17"
 
 
@@ -43,6 +46,7 @@ jobs:
       # ৪. Linux Package ইনস্টল
       # ==========================================
       - name: Linux Package ইনস্টল
+        shell: bash
         run: |
           set -e
 
@@ -52,8 +56,6 @@ jobs:
             git \
             zip \
             unzip \
-            curl \
-            wget \
             autoconf \
             automake \
             libtool \
@@ -61,14 +63,14 @@ jobs:
             zlib1g-dev \
             libncurses5-dev \
             libncursesw5-dev \
-            cmake \
-            libffi-dev
+            cmake
 
 
       # ==========================================
-      # ৫. Buildozer ইনস্টল
+      # ৫. Python Build Package
       # ==========================================
       - name: Buildozer ইনস্টল
+        shell: bash
         run: |
           set -e
 
@@ -83,6 +85,7 @@ jobs:
       # ৬. Project পরীক্ষা
       # ==========================================
       - name: Project পরীক্ষা
+        shell: bash
         run: |
           set -e
 
@@ -108,11 +111,39 @@ jobs:
 
 
       # ==========================================
-      # ৭. main.py Syntax পরীক্ষা
+      # ৭. buildozer.spec পরীক্ষা
       # ==========================================
-      - name: Python Syntax পরীক্ষা
+      - name: Buildozer Spec পরীক্ষা
+        shell: bash
         run: |
           set -e
+
+          if [ ! -f "buildozer.spec" ]; then
+            echo "ERROR: buildozer.spec পাওয়া যায়নি।"
+            exit 1
+          fi
+
+          echo "buildozer.spec পাওয়া গেছে।"
+
+          echo
+          echo "Android configuration:"
+          grep -E \
+            "android.api|android.minapi|android.sdk_path|android.ndk_path" \
+            buildozer.spec || true
+
+
+      # ==========================================
+      # ৮. main.py Syntax পরীক্ষা
+      # ==========================================
+      - name: Python Syntax পরীক্ষা
+        shell: bash
+        run: |
+          set -e
+
+          if [ ! -f "main.py" ]; then
+            echo "ERROR: main.py পাওয়া যায়নি।"
+            exit 1
+          fi
 
           python -m py_compile main.py
 
@@ -121,9 +152,10 @@ jobs:
 
 
       # ==========================================
-      # ৮. পুরোনো Build cache পরিষ্কার
+      # ৯. পুরোনো Build Cache পরিষ্কার
       # ==========================================
       - name: Build Cache পরিষ্কার
+        shell: bash
         run: |
           set -e
 
@@ -140,180 +172,174 @@ jobs:
 
 
       # ==========================================
-      # ৯. GitHub Actions Android SDK শনাক্ত
+      # ১০. Buildozer Android SDK প্রস্তুতি
       # ==========================================
-      - name: Android SDK শনাক্ত
+      - name: Buildozer Android SDK প্রস্তুতি
         shell: bash
         run: |
           set -e
 
           echo "=========================================="
-          echo "ANDROID SDK শনাক্ত"
+          echo "BUILDOZER ANDROID SDK SETUP"
           echo "=========================================="
 
-          SDK_ROOT="/usr/local/lib/android/sdk"
+          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
 
-          if [ ! -d "$SDK_ROOT" ]; then
-            echo "ERROR: Android SDK পাওয়া যায়নি।"
-            exit 1
-          fi
+          SYSTEM_SDK="/usr/local/lib/android/sdk"
 
-          echo "SDK ROOT:"
+          echo
+          echo "Buildozer SDK:"
           echo "$SDK_ROOT"
 
           echo
-          echo "sdkmanager খোঁজা হচ্ছে..."
-
-          SDKMANAGER="$(find "$SDK_ROOT" \
-            -type f \
-            -name sdkmanager \
-            -print -quit)"
-
-          if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager পাওয়া যায়নি।"
-            exit 1
-          fi
-
-          echo "sdkmanager পাওয়া গেছে:"
-          echo "$SDKMANAGER"
-
-          echo
-          echo "SDK directory পরীক্ষা:"
-          ls -la "$SDK_ROOT"
-
-          echo
-          echo "Command line tools:"
-          find "$SDK_ROOT/cmdline-tools" \
-            -maxdepth 3 \
-            -type f \
-            -name sdkmanager \
-            -print || true
+          echo "System SDK:"
+          echo "$SYSTEM_SDK"
 
 
-      # ==========================================
-      # ১০. Buildozer SDK Compatibility তৈরি
-      # ==========================================
-      - name: Buildozer SDK Compatibility
-        shell: bash
-        run: |
-          set -e
-
-          echo "=========================================="
-          echo "BUILDOZER SDK COMPATIBILITY"
-          echo "=========================================="
-
-          SDK_ROOT="/usr/local/lib/android/sdk"
-
-          CMDLINE="$SDK_ROOT/cmdline-tools/latest/bin"
-
-          if [ ! -f "$CMDLINE/sdkmanager" ]; then
-            echo "ERROR: cmdline-tools-এর sdkmanager পাওয়া যায়নি।"
-            exit 1
-          fi
-
-          echo
-          echo "নতুন sdkmanager:"
-          echo "$CMDLINE/sdkmanager"
-
-          # ------------------------------------------
-          # Buildozer পুরোনো SDK structure চায়
-          # tools/bin/sdkmanager
-          # ------------------------------------------
-
-          sudo mkdir -p "$SDK_ROOT/tools/bin"
-
-          # ------------------------------------------
-          # sdkmanager compatibility link
-          # ------------------------------------------
-
-          sudo ln -sf \
-            "$CMDLINE/sdkmanager" \
-            "$SDK_ROOT/tools/bin/sdkmanager"
-
-          # ------------------------------------------
-          # avdmanager compatibility link
-          # ------------------------------------------
-
-          if [ -f "$CMDLINE/avdmanager" ]; then
-            sudo ln -sf \
-              "$CMDLINE/avdmanager" \
-              "$SDK_ROOT/tools/bin/avdmanager"
-          fi
-
-          # ------------------------------------------
-          # sdkmanager executable পরীক্ষা
-          # ------------------------------------------
-
-          if [ ! -f "$SDK_ROOT/tools/bin/sdkmanager" ]; then
-            echo "ERROR: compatibility sdkmanager তৈরি হয়নি।"
-            exit 1
-          fi
-
-          echo
-          echo "Buildozer compatibility path:"
-          ls -la "$SDK_ROOT/tools/bin"
-
-          echo
-          echo "sdkmanager version:"
-          "$SDK_ROOT/tools/bin/sdkmanager" --version
-
-
-      # ==========================================
-      # ১১. Android SDK Environment সেট করা
-      # ==========================================
-      - name: Android SDK Environment
-        shell: bash
-        run: |
-          set -e
-
-          echo "=========================================="
-          echo "ANDROID SDK ENVIRONMENT"
-          echo "=========================================="
-
-          SDK_ROOT="/usr/local/lib/android/sdk"
-
-          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROIDSDK=$SDK_ROOT" >> "$GITHUB_ENV"
-
-          echo "$SDK_ROOT/tools/bin" >> "$GITHUB_PATH"
-          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
-
-          echo
-          echo "Android SDK environment প্রস্তুত হয়েছে।"
-
-
-      # ==========================================
-      # ১২. Android SDK License
-      # ==========================================
-      - name: Android SDK License প্রস্তুতি
-        shell: bash
-        run: |
-          set -e
-
-          echo "=========================================="
-          echo "ANDROID SDK LICENSE"
-          echo "=========================================="
-
-          SDK_ROOT="/usr/local/lib/android/sdk"
+          # ==========================================
+          # Buildozer SDK directory তৈরি
+          # ==========================================
+          mkdir -p "$SDK_ROOT"
 
           mkdir -p "$SDK_ROOT/licenses"
 
+          mkdir -p "$SDK_ROOT/tools/bin"
+
+          mkdir -p "$SDK_ROOT/cmdline-tools"
+
+
+          # ==========================================
+          # System sdkmanager খোঁজা
+          # ==========================================
+          echo
+          echo "sdkmanager খোঁজা হচ্ছে..."
+
+          SDKMANAGER_SOURCE=""
+
+          if [ -f "$SYSTEM_SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+
+            SDKMANAGER_SOURCE="$SYSTEM_SDK/cmdline-tools/latest/bin/sdkmanager"
+
+          else
+
+            SDKMANAGER_SOURCE="$(find "$SYSTEM_SDK" \
+              -type f \
+              -name sdkmanager \
+              -print -quit)"
+
+          fi
+
+
+          if [ -z "$SDKMANAGER_SOURCE" ]; then
+
+            echo
+            echo "ERROR: System sdkmanager পাওয়া যায়নি।"
+
+            echo
+            echo "বর্তমান Android SDK:"
+            find "$SYSTEM_SDK" \
+              -maxdepth 5 \
+              -type f \
+              -name sdkmanager \
+              -print || true
+
+            exit 1
+
+          fi
+
+
+          echo
+          echo "sdkmanager পাওয়া গেছে:"
+          echo "$SDKMANAGER_SOURCE"
+
+
+          # ==========================================
+          # cmdline-tools source directory নির্ধারণ
+          # ==========================================
+          CMDLINE_SOURCE="$(dirname "$(dirname "$SDKMANAGER_SOURCE")")"
+
+          echo
+          echo "Command Line Tools:"
+          echo "$CMDLINE_SOURCE"
+
+
+          # ==========================================
+          # Buildozer SDK-তে cmdline-tools কপি
+          # ==========================================
+          rm -rf "$SDK_ROOT/cmdline-tools/latest"
+
+          mkdir -p "$SDK_ROOT/cmdline-tools/latest"
+
+          cp -a \
+            "$CMDLINE_SOURCE/." \
+            "$SDK_ROOT/cmdline-tools/latest/"
+
+
+          # ==========================================
+          # Buildozer পুরোনো SDK path compatibility
+          # ==========================================
+          ln -sfn \
+            "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
+            "$SDK_ROOT/tools/bin/sdkmanager"
+
+
+          if [ -f "$SDK_ROOT/cmdline-tools/latest/bin/avdmanager" ]; then
+
+            ln -sfn \
+              "$SDK_ROOT/cmdline-tools/latest/bin/avdmanager" \
+              "$SDK_ROOT/tools/bin/avdmanager"
+
+          fi
+
+
+          # ==========================================
+          # SDK Environment
+          # ==========================================
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+
+          echo "ANDROIDSDK=$SDK_ROOT" >> "$GITHUB_ENV"
+
+          echo "$SDK_ROOT/tools/bin" >> "$GITHUB_PATH"
+
+          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+
+
+          # ==========================================
+          # Android SDK License
+          # ==========================================
           printf '%s\n' \
             "24333f8a63b6825ea9c5514f83c2829b004d1fee" \
             "d56f5187479451eabf01fb78af6dfcb131a6481e" \
             > "$SDK_ROOT/licenses/android-sdk-license"
 
-          echo "Android SDK license প্রস্তুত হয়েছে।"
 
-          cat "$SDK_ROOT/licenses/android-sdk-license"
+          echo
+          echo "SDK structure:"
+          find "$SDK_ROOT" \
+            -maxdepth 4 \
+            -type f \
+            -name "sdkmanager" \
+            -print
+
+
+          echo
+          echo "Buildozer sdkmanager পরীক্ষা:"
+
+          "$SDK_ROOT/tools/bin/sdkmanager" --version
+
+
+          echo
+          echo "Buildozer Android SDK প্রস্তুত হয়েছে।"
 
 
       # ==========================================
-      # ১৩. Android SDK Components ইনস্টল
+      # ১১. Android SDK Components ইনস্টল
       # ==========================================
-      - name: Android SDK Components ইনস্টল
+      - name: Android Components ইনস্টল
         shell: bash
         run: |
           set -e
@@ -322,27 +348,45 @@ jobs:
           echo "ANDROID SDK COMPONENTS"
           echo "=========================================="
 
-          SDK_ROOT="/usr/local/lib/android/sdk"
+          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
 
           SDKMANAGER="$SDK_ROOT/tools/bin/sdkmanager"
 
+
+          if [ ! -f "$SDKMANAGER" ]; then
+
+            echo "ERROR: Buildozer sdkmanager পাওয়া যায়নি।"
+            exit 1
+
+          fi
+
+
+          echo
           echo "sdkmanager:"
           echo "$SDKMANAGER"
 
-          if [ ! -f "$SDKMANAGER" ]; then
-            echo "ERROR: Buildozer sdkmanager পাওয়া যায়নি।"
-            exit 1
-          fi
 
           echo
-          echo "License গ্রহণ করা হচ্ছে..."
+          echo "sdkmanager version:"
+          "$SDKMANAGER" --version
+
+
+          # ==========================================
+          # License গ্রহণ
+          # ==========================================
+          echo
+          echo "Android SDK license গ্রহণ করা হচ্ছে..."
 
           yes | "$SDKMANAGER" \
             --sdk_root="$SDK_ROOT" \
             --licenses || true
 
+
+          # ==========================================
+          # প্রয়োজনীয় Android Components
+          # ==========================================
           echo
-          echo "প্রয়োজনীয় Android components ইনস্টল হচ্ছে..."
+          echo "Android components ইনস্টল হচ্ছে..."
 
           "$SDKMANAGER" \
             --sdk_root="$SDK_ROOT" \
@@ -350,25 +394,46 @@ jobs:
             "platforms;android-35" \
             "build-tools;35.0.0"
 
+
+          # ==========================================
+          # Build-Tools পরীক্ষা
+          # ==========================================
           echo
-          echo "Build-Tools:"
+          echo "Installed Build-Tools:"
+
           ls -la "$SDK_ROOT/build-tools"
 
-          echo
-          echo "Platforms:"
-          ls -la "$SDK_ROOT/platforms"
 
           echo
-          echo "AIDL খোঁজা হচ্ছে..."
+          echo "AIDL খোঁজা হচ্ছে:"
 
           find "$SDK_ROOT/build-tools" \
             -type f \
-            -name aidl \
+            -name "aidl" \
             -print
 
 
+          # ==========================================
+          # AIDL অবশ্যই থাকতে হবে
+          # ==========================================
+          if ! find "$SDK_ROOT/build-tools" \
+            -type f \
+            -name "aidl" \
+            | grep -q "aidl"; then
+
+            echo
+            echo "ERROR: AIDL পাওয়া যায়নি।"
+            exit 1
+
+          fi
+
+
+          echo
+          echo "Android SDK components প্রস্তুত।"
+
+
       # ==========================================
-      # ১৪. Buildozer Environment শেষ পরীক্ষা
+      # ১২. Buildozer Environment চূড়ান্ত পরীক্ষা
       # ==========================================
       - name: Buildozer Environment পরীক্ষা
         shell: bash
@@ -376,16 +441,20 @@ jobs:
           set -e
 
           echo "=========================================="
-          echo "BUILDOZER ENVIRONMENT CHECK"
+          echo "FINAL BUILDOZER ENVIRONMENT"
           echo "=========================================="
 
-          SDK_ROOT="/usr/local/lib/android/sdk"
+          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
+
 
           export ANDROID_HOME="$SDK_ROOT"
+
           export ANDROID_SDK_ROOT="$SDK_ROOT"
+
           export ANDROIDSDK="$SDK_ROOT"
 
           export PATH="$SDK_ROOT/tools/bin:$SDK_ROOT/cmdline-tools/latest/bin:$SDK_ROOT/platform-tools:$PATH"
+
 
           echo
           echo "ANDROID_HOME:"
@@ -399,28 +468,37 @@ jobs:
           echo "ANDROIDSDK:"
           echo "$ANDROIDSDK"
 
+
           echo
           echo "sdkmanager:"
           command -v sdkmanager
+
 
           echo
           echo "sdkmanager version:"
           sdkmanager --version
 
-          echo
-          echo "Buildozer compatibility sdkmanager:"
-          "$SDK_ROOT/tools/bin/sdkmanager" --version
 
           echo
           echo "AIDL:"
           find "$SDK_ROOT/build-tools" \
             -type f \
-            -name aidl \
+            -name "aidl" \
             -print
 
 
+          echo
+          echo "Build-Tools:"
+          ls -la "$SDK_ROOT/build-tools"
+
+
+          echo
+          echo "Platforms:"
+          ls -la "$SDK_ROOT/platforms"
+
+
       # ==========================================
-      # ১৫. APK তৈরি
+      # ১৩. APK Build
       # ==========================================
       - name: APK তৈরি
         shell: bash
@@ -431,30 +509,45 @@ jobs:
           echo "V16 ANTIVIRUS APK BUILD"
           echo "=========================================="
 
-          SDK_ROOT="/usr/local/lib/android/sdk"
+          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
+
 
           export ANDROID_HOME="$SDK_ROOT"
+
           export ANDROID_SDK_ROOT="$SDK_ROOT"
+
           export ANDROIDSDK="$SDK_ROOT"
 
           export PATH="$SDK_ROOT/tools/bin:$SDK_ROOT/cmdline-tools/latest/bin:$SDK_ROOT/platform-tools:$PATH"
 
+
           echo
-          echo "SDK:"
-          echo "$ANDROIDSDK"
+          echo "Final Android SDK:"
+          echo "$ANDROID_HOME"
+
 
           echo
           echo "sdkmanager:"
           command -v sdkmanager
 
+
           echo
-          echo "Buildozer শুরু হচ্ছে..."
+          echo "AIDL:"
+          find "$SDK_ROOT/build-tools" \
+            -type f \
+            -name "aidl" \
+            -print
+
+
+          echo
+          echo "Buildozer build শুরু হচ্ছে..."
+
 
           buildozer -v android debug
 
 
       # ==========================================
-      # ১৬. APK পরীক্ষা
+      # ১৪. APK পরীক্ষা
       # ==========================================
       - name: APK পরীক্ষা
         if: always()
@@ -464,14 +557,21 @@ jobs:
           echo "GENERATED APK"
           echo "=========================================="
 
-          if find bin \
+
+          if [ -d "bin" ] && \
+            find bin \
             -maxdepth 1 \
             -type f \
             -name "*.apk" \
             | grep -q ".apk"; then
 
+
             echo
             echo "APK সফলভাবে তৈরি হয়েছে।"
+
+
+            echo
+            echo "APK Files:"
 
             find bin \
               -maxdepth 1 \
@@ -479,18 +579,32 @@ jobs:
               -name "*.apk" \
               -exec ls -lh {} \;
 
+
           else
+
 
             echo
             echo "ERROR: APK তৈরি হয়নি।"
 
+
             echo
             echo "APK খোঁজা হচ্ছে..."
 
+
             find . \
               -type f \
-              \( -name "*.apk" -o -name "*.aab" \) \
+              \( \
+                -name "*.apk" \
+                -o \
+                -name "*.aab" \
+              \) \
               -print || true
+
+
+            echo
+            echo "Build directory:"
+            ls -la bin 2>/dev/null || true
+
 
             exit 1
 
@@ -498,7 +612,7 @@ jobs:
 
 
       # ==========================================
-      # ১৭. APK Artifact Upload
+      # ১৫. APK Artifact Upload
       # ==========================================
       - name: APK Upload
         if: success()
