@@ -17,10 +17,12 @@ requirements = python3,kivy,plyer
 android.api = 35
 android.minapi = 23
 
-android.ndk = 27.3.13750724
-android.ndk_path = /usr/local/lib/android/sdk/ndk/27.3.13750724
+android.ndk = 28.2.13676358
+android.ndk_path = /usr/local/lib/android/sdk/ndk/28.2.13676358
+
 android.sdk_path = /usr/local/lib/android/sdk
 
 android.ndk_api = 23
+
 android.skip_update = True
 android.accept_sdk_license = True
