@@ -15,42 +15,104 @@ jobs:
     runs-on: ubuntu-22.04
 
     env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
+      # ==========================================================
+      # Python
+      # ==========================================================
+      PYTHON_VERSION: "3.11"
+
+      # ==========================================================
+      # Android SDK - GitHub Runner-এর preinstalled SDK
+      # ==========================================================
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROIDSDK: /usr/local/lib/android/sdk
+
+      # ==========================================================
+      # Android NDK
+      # ==========================================================
+      ANDROID_NDK_VERSION: "27.3.13750724"
       ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/27.3.13750724
       ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/27.3.13750724
       ANDROID_NDK: /usr/local/lib/android/sdk/ndk/27.3.13750724
-      P4A_RELEASE: master
+
+      # ==========================================================
+      # Android API
+      # ==========================================================
+      ANDROIDAPI: "35"
+      ANDROIDMINAPI: "24"
+
+      # ==========================================================
+      # Buildozer
+      # ==========================================================
+      BUILDOZER_WARN_ON_ROOT: "1"
+
+      # ==========================================================
+      # Prevent unnecessary pip cache problems
+      # ==========================================================
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
 
     steps:
 
-      # ==========================================
-      # 1. Checkout
-      # ==========================================
+      # ==========================================================
+      # 01. Checkout
+      # ==========================================================
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      # ==========================================
-      # 2. Python
-      # ==========================================
+      # ==========================================================
+      # 02. Python 3.11
+      # ==========================================================
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+          cache: "pip"
 
-      # ==========================================
-      # 3. Java 17
-      # ==========================================
+      # ==========================================================
+      # 03. Java 17
+      # ==========================================================
       - name: Setup Java 17
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
-      # ==========================================
-      # 4. Android Environment
-      # ==========================================
+      # ==========================================================
+      # 04. Check project files
+      # ==========================================================
+      - name: Check project
+        shell: bash
+        run: |
+          set -eux
+
+          echo "=========================================="
+          echo "PROJECT"
+          echo "=========================================="
+
+          pwd
+          echo
+
+          echo "Repository files:"
+          find . -maxdepth 2 -type f | sort | head -200
+
+          echo
+
+          if [ ! -f "buildozer.spec" ]; then
+            echo "ERROR: buildozer.spec পাওয়া যায়নি!"
+            exit 1
+          fi
+
+          if [ ! -f "main.py" ]; then
+            echo "ERROR: main.py পাওয়া যায়নি!"
+            exit 1
+          fi
+
+          echo "buildozer.spec পাওয়া গেছে."
+          echo "main.py পাওয়া গেছে."
+
+      # ==========================================================
+      # 05. Configure Android environment
+      # ==========================================================
       - name: Configure Android environment
         shell: bash
         run: |
@@ -58,6 +120,13 @@ jobs:
 
           SDK="/usr/local/lib/android/sdk"
           NDK="$SDK/ndk/27.3.13750724"
+
+          echo "=========================================="
+          echo "ANDROID ENVIRONMENT"
+          echo "=========================================="
+
+          test -d "$SDK"
+          test -d "$NDK"
 
           echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
@@ -71,53 +140,87 @@ jobs:
           echo "$SDK/platform-tools" >> "$GITHUB_PATH"
           echo "$SDK/build-tools/35.0.0" >> "$GITHUB_PATH"
 
-      # ==========================================
-      # 5. Check Android SDK
-      # ==========================================
-      - name: Check Android SDK
-        shell: bash
-        run: |
-          set -eux
-
-          SDK="/usr/local/lib/android/sdk"
-
-          echo "=========================================="
-          echo "ANDROID SDK"
-          echo "=========================================="
-
-          test -d "$SDK"
-          test -d "$SDK/platform-tools"
-
           echo
           echo "SDK:"
-          ls -la "$SDK"
-
-          echo
-          echo "Build Tools:"
-          ls -la "$SDK/build-tools" || true
-
-          echo
-          echo "Platforms:"
-          ls -la "$SDK/platforms" || true
+          echo "$SDK"
 
           echo
           echo "NDK:"
-          ls -la "$SDK/ndk" || true
+          echo "$NDK"
 
-      # ==========================================
-      # 6. Install/verify Android components
-      # ==========================================
-      - name: Install Android SDK components
+      # ==========================================================
+      # 06. Locate sdkmanager
+      # ==========================================================
+      - name: Locate sdkmanager
         shell: bash
         run: |
           set -eux
 
           SDK="/usr/local/lib/android/sdk"
-          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
 
-          if [ ! -x "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager পাওয়া যায়নি:"
-            echo "$SDKMANAGER"
+          echo "=========================================="
+          echo "SDKMANAGER"
+          echo "=========================================="
+
+          if [ -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          elif [ -x "$SDK/tools/bin/sdkmanager" ]; then
+            SDKMANAGER="$SDK/tools/bin/sdkmanager"
+          else
+            echo "ERROR: sdkmanager পাওয়া যায়নি!"
+            find "$SDK" -type f -name sdkmanager -print || true
+            exit 1
+          fi
+
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+
+          "$SDKMANAGER" --version
+
+      # ==========================================================
+      # 07. Accept Android licenses
+      # ==========================================================
+      - name: Accept Android SDK licenses
+        shell: bash
+        run: |
+          set -eux
+
+          SDK="/usr/local/lib/android/sdk"
+
+          if [ -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          elif [ -x "$SDK/tools/bin/sdkmanager" ]; then
+            SDKMANAGER="$SDK/tools/bin/sdkmanager"
+          else
+            echo "ERROR: sdkmanager পাওয়া যায়নি!"
+            exit 1
+          fi
+
+          echo "=========================================="
+          echo "ANDROID LICENSES"
+          echo "=========================================="
+
+          yes | "$SDKMANAGER" \
+            --sdk_root="$SDK" \
+            --licenses >/dev/null 2>&1 || true
+
+          echo "Android SDK licenses processed."
+
+      # ==========================================================
+      # 08. Install ONLY required SDK components
+      # ==========================================================
+      - name: Install required Android components
+        shell: bash
+        run: |
+          set -eux
+
+          SDK="/usr/local/lib/android/sdk"
+
+          if [ -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          elif [ -x "$SDK/tools/bin/sdkmanager" ]; then
+            SDKMANAGER="$SDK/tools/bin/sdkmanager"
+          else
+            echo "ERROR: sdkmanager পাওয়া যায়নি!"
             exit 1
           fi
 
@@ -125,115 +228,118 @@ jobs:
           echo "ANDROID SDK COMPONENTS"
           echo "=========================================="
 
-          echo
-          echo "sdkmanager:"
-          "$SDKMANAGER" --version
-
-          echo
-          echo "Accepting Android SDK licenses..."
-
           yes | "$SDKMANAGER" \
             --sdk_root="$SDK" \
-            --licenses || true
-
-          echo
-          echo "Installing required components..."
-
-          "$SDKMANAGER" \
-            --sdk_root="$SDK" \
             "platform-tools" \
-            "platforms;android-33" \
             "platforms;android-35" \
-            "build-tools;33.0.2" \
             "build-tools;35.0.0"
 
           echo
-          echo "SDK components:"
-          ls -la "$SDK/build-tools"
-          ls -la "$SDK/platforms"
+          echo "Required Android components installed."
 
-      # ==========================================
-      # 7. Verify AIDL
-      # ==========================================
-      - name: Verify AIDL
+      # ==========================================================
+      # 09. Verify SDK / AIDL / Platform / NDK
+      # ==========================================================
+      - name: Verify Android SDK
         shell: bash
         run: |
           set -eux
 
           SDK="/usr/local/lib/android/sdk"
+          NDK="$SDK/ndk/27.3.13750724"
 
           echo "=========================================="
-          echo "AIDL CHECK"
+          echo "VERIFY ANDROID SDK"
           echo "=========================================="
 
-          FOUND_AIDL=""
+          echo
+          echo "SDK:"
+          test -d "$SDK"
+          echo "OK: $SDK"
 
-          if [ -x "$SDK/build-tools/35.0.0/aidl" ]; then
-            FOUND_AIDL="$SDK/build-tools/35.0.0/aidl"
-          elif [ -x "$SDK/build-tools/33.0.2/aidl" ]; then
-            FOUND_AIDL="$SDK/build-tools/33.0.2/aidl"
+          echo
+          echo "Platform 35:"
+          test -d "$SDK/platforms/android-35"
+          echo "OK"
+
+          echo
+          echo "Build Tools:"
+          test -d "$SDK/build-tools/35.0.0"
+          echo "OK"
+
+          echo
+          echo "AIDL:"
+          test -x "$SDK/build-tools/35.0.0/aidl"
+          "$SDK/build-tools/35.0.0/aidl" --version || true
+
+          echo
+          echo "NDK:"
+          test -d "$NDK"
+          echo "OK: $NDK"
+
+          echo
+          echo "NDK version:"
+          if [ -f "$NDK/source.properties" ]; then
+            cat "$NDK/source.properties"
           fi
 
-          if [ -z "$FOUND_AIDL" ]; then
-            echo "ERROR: AIDL পাওয়া যায়নি।"
-            find "$SDK/build-tools" -type f -name aidl -print || true
-            exit 1
-          fi
+          echo
+          echo "ADB:"
+          "$SDK/platform-tools/adb" version
 
-          echo "AIDL found:"
-          echo "$FOUND_AIDL"
+          echo
+          echo "=========================================="
+          echo "ANDROID ENVIRONMENT OK"
+          echo "=========================================="
 
-          "$FOUND_AIDL" --version || true
-
-      # ==========================================
-      # 8. Verify NDK
-      # ==========================================
-      - name: Verify Android NDK
+      # ==========================================================
+      # 10. Install Python build dependencies
+      # ==========================================================
+      - name: Install Python build dependencies
         shell: bash
         run: |
           set -eux
 
-          NDK="/usr/local/lib/android/sdk/ndk/27.3.13750724"
+          python --version
+          python -m pip --version
 
-          echo "=========================================="
-          echo "NDK CHECK"
-          echo "=========================================="
-
-          if [ ! -d "$NDK" ]; then
-            echo "ERROR: NDK 27.3.13750724 পাওয়া যায়নি।"
-            ls -la "/usr/local/lib/android/sdk/ndk" || true
-            exit 1
-          fi
-
-          echo "NDK found:"
-          echo "$NDK"
-
-          ls -la "$NDK"
-
-      # ==========================================
-      # 9. Install Buildozer dependencies
-      # ==========================================
-      - name: Install Buildozer dependencies
-        shell: bash
-        run: |
-          set -eux
-
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools wheel
 
           python -m pip install \
             "buildozer>=1.5.0" \
-            "cython<3.1" \
-            virtualenv \
-            setuptools \
-            wheel
+            "cython<3.0" \
+            virtualenv
 
-          # p4a requires sh < 2
-          python -m pip install "sh<2.0,>=1.10"
+      # ==========================================================
+      # 11. Check Buildozer
+      # ==========================================================
+      - name: Check Buildozer
+        shell: bash
+        run: |
+          set -eux
 
-      # ==========================================
-      # 10. Verify buildozer.spec
-      # ==========================================
-      - name: Verify buildozer.spec
+          echo "=========================================="
+          echo "BUILDOZER"
+          echo "=========================================="
+
+          buildozer --version
+
+          echo
+          echo "Python:"
+          python --version
+
+          echo
+          echo "Java:"
+          java -version
+
+          echo
+          echo "Javac:"
+          javac -version
+
+      # ==========================================================
+      # 12. Validate buildozer.spec
+      # ==========================================================
+      - name: Show buildozer.spec
         shell: bash
         run: |
           set -eux
@@ -242,49 +348,96 @@ jobs:
           echo "BUILDOZER SPEC"
           echo "=========================================="
 
-          if [ ! -f buildozer.spec ]; then
-            echo "ERROR: buildozer.spec পাওয়া যায়নি।"
-            exit 1
-          fi
+          sed -n '1,260p' buildozer.spec
 
-          cat buildozer.spec
-
-      # ==========================================
-      # 11. Clean old Buildozer cache
-      # ==========================================
-      - name: Clean Buildozer cache
+      # ==========================================================
+      # 13. Clean old Buildozer state
+      # ==========================================================
+      - name: Clean Buildozer state
         shell: bash
         run: |
           set -eux
+
+          echo "=========================================="
+          echo "CLEAN BUILDOZER STATE"
+          echo "=========================================="
 
           rm -rf .buildozer
           rm -rf bin
 
           mkdir -p bin
+          mkdir -p build-logs
 
-      # ==========================================
-      # 12. Build APK
-      # ==========================================
+          echo "Old build state removed."
+
+      # ==========================================================
+      # 14. Force Buildozer to use runner Android SDK/NDK
+      # ==========================================================
+      - name: Configure Buildozer Android paths
+        shell: bash
+        run: |
+          set -eux
+
+          SDK="/usr/local/lib/android/sdk"
+          NDK="$SDK/ndk/27.3.13750724"
+
+          echo "=========================================="
+          echo "BUILDOZER ANDROID PATHS"
+          echo "=========================================="
+
+          mkdir -p "$HOME/.buildozer"
+
+          cat > "$HOME/.buildozer/default.spec" <<EOF
+          [buildozer]
+          log_level = 2
+          warn_on_root = 1
+
+          [app]
+          android.sdk_path = $SDK
+          android.ndk_path = $NDK
+          EOF
+
+          echo
+          echo "Buildozer default configuration:"
+          cat "$HOME/.buildozer/default.spec"
+
+      # ==========================================================
+      # 15. Build APK
+      # ==========================================================
       - name: Build APK
         shell: bash
         run: |
           set -o pipefail
 
+          mkdir -p build-logs
+          mkdir -p bin
+
           echo "=========================================="
           echo "V16 ANTIVIRUS APK BUILD"
           echo "=========================================="
 
-          mkdir -p build-logs
+          echo
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          echo "ANDROIDAPI=$ANDROIDAPI"
+          echo "ANDROIDMINAPI=$ANDROIDMINAPI"
 
-          buildozer -v android debug 2>&1 | tee build-logs/buildozer-full.log
+          echo
+          echo "Starting Buildozer..."
 
-      # ==========================================
-      # 13. Show APK
-      # ==========================================
-      - name: Find generated APK
+          buildozer -v android debug 2>&1 | tee \
+            build-logs/buildozer-full.log
+
+      # ==========================================================
+      # 16. Find generated APK
+      # ==========================================================
+      - name: Find APK
         if: always()
         shell: bash
         run: |
+          set +e
+
           echo "=========================================="
           echo "GENERATED APK"
           echo "=========================================="
@@ -298,48 +451,34 @@ jobs:
 
           find . \
             -type f \
-            \( -name "*.apk" -o -name "*.aab" \) \
-            -print || true
+            -name "*.apk" \
+            -not -path "./.git/*" \
+            -print 2>/dev/null || true
 
-      # ==========================================
-      # 14. Copy APK to output
-      # ==========================================
-      - name: Prepare APK artifact
-        if: success()
-        shell: bash
-        run: |
-          set -eux
+          APK="$(find bin -maxdepth 1 -type f -name "*.apk" 2>/dev/null | head -n 1)"
 
-          mkdir -p apk-output
+          if [ -n "$APK" ]; then
+            echo
+            echo "APK FOUND:"
+            echo "$APK"
 
-          APK_FILE="$(find bin -maxdepth 1 -type f -name "*.apk" | head -n 1)"
+            mkdir -p apk-output
+            cp "$APK" apk-output/V16-Antivirus.apk
 
-          if [ -z "$APK_FILE" ]; then
+            echo
+            echo "APK copied to:"
+            ls -lh apk-output/V16-Antivirus.apk
+
+            echo "APK_FOUND=true" >> "$GITHUB_ENV"
+          else
+            echo
             echo "ERROR: APK তৈরি হয়নি।"
-            exit 1
+            echo "APK_FOUND=false" >> "$GITHUB_ENV"
           fi
 
-          echo "APK found:"
-          echo "$APK_FILE"
-
-          cp "$APK_FILE" apk-output/V16-Antivirus.apk
-
-          ls -lah apk-output
-
-      # ==========================================
-      # 15. Upload APK
-      # ==========================================
-      - name: Upload APK
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: V16-Antivirus-APK
-          path: apk-output/V16-Antivirus.apk
-          if-no-files-found: error
-
-      # ==========================================
-      # 16. Collect Buildozer logs
-      # ==========================================
+      # ==========================================================
+      # 17. Collect Buildozer logs
+      # ==========================================================
       - name: Collect Buildozer logs
         if: always()
         shell: bash
@@ -348,27 +487,51 @@ jobs:
 
           mkdir -p build-logs
 
+          echo "=========================================="
+          echo "COLLECTING BUILD LOGS"
+          echo "=========================================="
+
           if [ -f build-logs/buildozer-full.log ]; then
-            echo "Buildozer full log already exists."
-          else
-            echo "Buildozer log was not created."
+            echo "Buildozer full log exists."
           fi
+
+          find .buildozer \
+            -type f \
+            \( \
+              -name "*.log" \
+              -o -name "*.txt" \
+              -o -name "*.out" \
+              -o -name "*.err" \
+            \) \
+            -print 2>/dev/null \
+            | head -500 > build-logs/build-files.txt
 
           echo
           echo "Build log files:"
-          find .buildozer -type f 2>/dev/null | head -n 500 \
-            >> build-logs/buildozer-files.txt || true
+          cat build-logs/build-files.txt || true
 
           echo
-          echo "Last 300 lines of Buildozer log:"
+          echo "Last 200 lines of Buildozer log:"
+
           if [ -f build-logs/buildozer-full.log ]; then
-            tail -n 300 build-logs/buildozer-full.log \
-              > build-logs/buildozer-last-300-lines.log
+            tail -n 200 build-logs/buildozer-full.log || true
           fi
 
-      # ==========================================
-      # 17. Upload logs
-      # ==========================================
+      # ==========================================================
+      # 18. Upload APK
+      # ==========================================================
+      - name: Upload APK artifact
+        if: success() && env.APK_FOUND == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: V16-Antivirus-APK
+          path: apk-output/V16-Antivirus.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      # ==========================================================
+      # 19. Upload Buildozer logs
+      # ==========================================================
       - name: Upload Buildozer logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -376,5 +539,45 @@ jobs:
           name: V16-Buildozer-Full-Logs
           path: |
             build-logs/
-            .buildozer/**/*.log
           if-no-files-found: warn
+          retention-days: 30
+
+      # ==========================================================
+      # 20. Upload complete Buildozer directory when failed
+      # ==========================================================
+      - name: Upload Buildozer diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: V16-Buildozer-Diagnostics
+          path: |
+            .buildozer/android/platform/python-for-android/
+            .buildozer/android/platform/build-*/build/
+          if-no-files-found: warn
+          retention-days: 7
+
+      # ==========================================================
+      # 21. Final result
+      # ==========================================================
+      - name: Final build result
+        if: always()
+        shell: bash
+        run: |
+          echo "=========================================="
+          echo "FINAL BUILD RESULT"
+          echo "=========================================="
+
+          if [ -f "apk-output/V16-Antivirus.apk" ]; then
+            echo
+            echo "SUCCESS: APK তৈরি হয়েছে!"
+            ls -lh apk-output/V16-Antivirus.apk
+            echo
+            echo "APK artifact: V16-Antivirus-APK"
+          else
+            echo
+            echo "FAILED: APK তৈরি হয়নি।"
+            echo
+            echo "Build logs artifact: V16-Buildozer-Full-Logs"
+            echo "Diagnostics artifact: V16-Buildozer-Diagnostics"
+            exit 1
+          fi
