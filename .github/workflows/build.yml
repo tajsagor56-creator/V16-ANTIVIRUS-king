@@ -12,29 +12,50 @@ jobs:
 
     steps:
 
-      - name: Checkout
+      # ==========================================
+      # ১. GitHub Repository থেকে Project নেওয়া
+      # ==========================================
+      - name: Repository Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
+
+      # ==========================================
+      # ২. Python 3.11 সেটআপ
+      # ==========================================
+      - name: Python সেটআপ
         uses: actions/setup-python@v5
         with:
           python-version: "3.11.16"
 
-      - name: Setup Java
+
+      # ==========================================
+      # ৩. Java 17 সেটআপ
+      # ==========================================
+      - name: Java সেটআপ
         uses: actions/setup-java@v4
         with:
-          distribution: "temurin"
+          distribution: temurin
           java-version: "17"
 
-      - name: Install packages
+
+      # ==========================================
+      # ৪. Android SDK Command Line Tools সেটআপ
+      # ==========================================
+      - name: Android SDK সেটআপ
+        uses: android-actions/setup-android@v3
+
+
+      # ==========================================
+      # ৫. প্রয়োজনীয় Linux Packages ইনস্টল
+      # ==========================================
+      - name: System Packages ইনস্টল
         run: |
           sudo apt-get update
+
           sudo apt-get install -y \
             git \
             zip \
             unzip \
-            curl \
-            wget \
             autoconf \
             automake \
             libtool \
@@ -44,157 +65,210 @@ jobs:
             libncursesw5-dev \
             cmake
 
-      - name: Install Buildozer
+
+      # ==========================================
+      # ৬. Android SDK Components ইনস্টল
+      # ==========================================
+      - name: Android SDK Components ইনস্টল
         run: |
-          python -m pip install --upgrade pip
-          pip install buildozer==1.6.0
-          pip install cython==0.29.37
-          pip install virtualenv
 
-      - name: Test Python
-        run: |
-          python -m py_compile main.py
-          echo "main.py syntax OK"
+          echo "=========================================="
+          echo "ANDROID SDK COMPONENTS"
+          echo "=========================================="
 
-      - name: Clean
-        run: |
-          rm -rf .buildozer
-          rm -rf bin
-          mkdir -p bin
+          echo "ANDROID_HOME=$ANDROID_HOME"
 
-      - name: Prepare Android SDK
-        shell: bash
-        run: |
-          set -e
+          # Android SDK License গ্রহণ
+          yes | sdkmanager --licenses > /dev/null || true
 
-          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
-
-          echo "=============================="
-          echo "ANDROID SDK"
-          echo "=============================="
-
-          rm -rf "$SDK_ROOT"
-
-          mkdir -p "$SDK_ROOT"
-          mkdir -p "$SDK_ROOT/cmdline-tools"
-
-          echo "Downloading Android command line tools..."
-
-          curl -L --fail \
-            -o "$HOME/cmdline-tools.zip" \
-            "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
-
-          mkdir -p "$HOME/android-tools"
-
-          unzip -q \
-            "$HOME/cmdline-tools.zip" \
-            -d "$HOME/android-tools"
-
-          mkdir -p "$SDK_ROOT/cmdline-tools/latest"
-
-          cp -r \
-            "$HOME/android-tools/cmdline-tools/." \
-            "$SDK_ROOT/cmdline-tools/latest/"
-
-          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-
-          if [ ! -f "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager not found"
-            find "$SDK_ROOT" -name sdkmanager -print
-            exit 1
-          fi
-
-          chmod +x "$SDKMANAGER"
-
-          echo "sdkmanager found:"
-          "$SDKMANAGER" --version
-
-          mkdir -p "$SDK_ROOT/licenses"
-
-          printf '%s\n' \
-            "24333f8a63b6825ea9c5514f83c2829b004d1fee" \
-            "d56f5187479451eabf01fb78af6dfcb131a6481e" \
-            > "$SDK_ROOT/licenses/android-sdk-license"
-
-          yes | "$SDKMANAGER" \
-            --sdk_root="$SDK_ROOT" \
-            --licenses || true
-
-          "$SDKMANAGER" \
-            --sdk_root="$SDK_ROOT" \
+          # Android SDK Platform এবং Build Tools ইনস্টল
+          sdkmanager \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
 
-          AIDL="$SDK_ROOT/build-tools/35.0.0/aidl"
+          echo
+          echo "=========================================="
+          echo "AIDL পরীক্ষা"
+          echo "=========================================="
 
-          if [ ! -f "$AIDL" ]; then
-            echo "ERROR: AIDL not found"
-            find "$SDK_ROOT/build-tools" -name aidl -print
+          find "$ANDROID_HOME/build-tools" \
+            -type f \
+            -name "aidl" \
+            -print
+
+          if find "$ANDROID_HOME/build-tools" \
+            -type f \
+            -name "aidl" \
+            | grep -q "aidl"; then
+
+            echo "AIDL পাওয়া গেছে।"
+
+          else
+
+            echo "ERROR: AIDL পাওয়া যায়নি।"
             exit 1
+
           fi
 
-          chmod +x "$AIDL"
 
-          echo "AIDL FOUND:"
-          ls -lh "$AIDL"
+      # ==========================================
+      # ৭. Python Build Packages ইনস্টল
+      # ==========================================
+      - name: Build Packages ইনস্টল
+        run: |
 
-          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROIDSDK=$SDK_ROOT" >> "$GITHUB_ENV"
+          python -m pip install --upgrade pip
+
+          python -m pip install \
+            buildozer==1.6.0 \
+            cython==0.29.37 \
+            virtualenv
+
+
+      # ==========================================
+      # ৮. Project পরীক্ষা
+      # ==========================================
+      - name: Project পরীক্ষা
+        run: |
+
+          echo "=========================================="
+          echo "PROJECT FILES"
+          echo "=========================================="
+
+          ls -la
+
+          echo
+          echo "=========================================="
+          echo "PYTHON VERSION"
+          echo "=========================================="
+
+          python --version
+
+          echo
+          echo "=========================================="
+          echo "JAVA VERSION"
+          echo "=========================================="
+
+          java -version
+
+          echo
+          echo "=========================================="
+          echo "BUILDOZER VERSION"
+          echo "=========================================="
+
+          buildozer --version
+
+
+      # ==========================================
+      # ৯. main.py Syntax পরীক্ষা
+      # ==========================================
+      - name: Python Syntax পরীক্ষা
+        run: |
+
+          echo "=========================================="
+          echo "MAIN.PY SYNTAX TEST"
+          echo "=========================================="
+
+          python -m py_compile main.py
+
+          echo
+          echo "main.py Syntax OK"
+
+
+      # ==========================================
+      # ১০. আগের Build পরিষ্কার
+      # ==========================================
+      - name: পুরোনো Build পরিষ্কার
+        run: |
+
+          rm -rf .buildozer
+          rm -rf bin
+
+          mkdir -p bin
+
+
+      # ==========================================
+      # ১১. Android Environment সেট করা
+      # ==========================================
+      - name: Android Environment সেটআপ
+        run: |
+
+          echo "=========================================="
+          echo "ANDROID ENVIRONMENT"
+          echo "=========================================="
+
+          echo "ANDROID_HOME=$ANDROID_HOME"
+
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+
+          echo "JAVA_HOME=$JAVA_HOME"
+
+          # Buildozer-কে GitHub Actions-এর Android SDK ব্যবহার করতে বলা
+          echo "ANDROIDSDK=$ANDROID_HOME" >> "$GITHUB_ENV"
+
           echo "ANDROIDAPI=35" >> "$GITHUB_ENV"
+
           echo "ANDROIDMINAPI=23" >> "$GITHUB_ENV"
 
-          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "ANDROIDNDK_HOME=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
 
-      - name: Verify SDK
+
+      # ==========================================
+      # ১২. Buildozer Android Debug APK Build
+      # ==========================================
+      - name: APK Build
         run: |
-          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
 
-          echo "SDK:"
-          echo "$SDK_ROOT"
+          echo "=========================================="
+          echo "BUILDING V16 ANTIVIRUS APK"
+          echo "=========================================="
 
-          echo "SDKMANAGER:"
-          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --version
-
-          echo "Build Tools:"
-          ls -la "$SDK_ROOT/build-tools"
-
-          echo "AIDL:"
-          ls -lh "$SDK_ROOT/build-tools/35.0.0/aidl"
-
-      - name: Build APK
-        run: |
           buildozer -v android debug
 
-      - name: Check APK
+
+      # ==========================================
+      # ১৩. APK তৈরি হয়েছে কি না পরীক্ষা
+      # ==========================================
+      - name: APK পরীক্ষা
         if: always()
         run: |
-          echo "=============================="
+
+          echo
+          echo "=========================================="
           echo "GENERATED APK"
-          echo "=============================="
+          echo "=========================================="
 
           if ls bin/*.apk >/dev/null 2>&1; then
+
+            echo "APK সফলভাবে তৈরি হয়েছে।"
+
             ls -lh bin/*.apk
+
           else
-            echo "ERROR: APK WAS NOT GENERATED"
-            find . -type f -name "*.apk" -print
+
+            echo "ERROR: APK তৈরি হয়নি।"
+
+            echo
+            echo "Project-এর মধ্যে APK খোঁজা হচ্ছে..."
+
+            find . \
+              -type f \
+              \( -name "*.apk" -o -name "*.aab" \) \
+              -print
+
             exit 1
+
           fi
 
-      - name: Upload APK
+
+      # ==========================================
+      # ১৪. APK GitHub Artifact হিসেবে Upload
+      # ==========================================
+      - name: APK Upload
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: V16-Antivirus-APK
           path: bin/*.apk
           if-no-files-found: error
-
-      - name: Upload Build Logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: V16-build-log
-          path: .buildozer
-          if-no-files-found: ignore
