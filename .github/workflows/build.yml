@@ -12,7 +12,7 @@ jobs:
 
     steps:
 
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Python
@@ -23,10 +23,10 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: "temurin"
           java-version: "17"
 
-      - name: Install System Packages
+      - name: Install packages
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -47,40 +47,16 @@ jobs:
       - name: Install Buildozer
         run: |
           python -m pip install --upgrade pip
-          python -m pip install \
-            buildozer==1.6.0 \
-            cython==0.29.37 \
-            virtualenv
+          pip install buildozer==1.6.0
+          pip install cython==0.29.37
+          pip install virtualenv
 
-      - name: Check Project
+      - name: Test Python
         run: |
-          echo "=============================="
-          echo "PROJECT CHECK"
-          echo "=============================="
-
-          pwd
-          ls -la
-
-          echo
-          python --version
-
-          echo
-          java -version
-
-          echo
-          buildozer --version
-
-      - name: Validate Python
-        run: |
-          echo "=============================="
-          echo "PYTHON TEST"
-          echo "=============================="
-
           python -m py_compile main.py
-
           echo "main.py syntax OK"
 
-      - name: Clean Build
+      - name: Clean
         run: |
           rm -rf .buildozer
           rm -rf bin
@@ -91,88 +67,58 @@ jobs:
         run: |
           set -e
 
-          echo "=============================="
-          echo "ANDROID SDK PREPARATION"
-          echo "=============================="
-
           SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
-          CMDLINE_DIR="$HOME/android-cmdline-tools"
 
-          echo "SDK ROOT:"
-          echo "$SDK_ROOT"
+          echo "=============================="
+          echo "ANDROID SDK"
+          echo "=============================="
 
           rm -rf "$SDK_ROOT"
-          rm -rf "$CMDLINE_DIR"
 
           mkdir -p "$SDK_ROOT"
-          mkdir -p "$CMDLINE_DIR"
+          mkdir -p "$SDK_ROOT/cmdline-tools"
 
           echo "Downloading Android command line tools..."
 
-          curl -L \
-            --fail \
+          curl -L --fail \
             -o "$HOME/cmdline-tools.zip" \
             "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
 
-          echo "Extracting command line tools..."
+          mkdir -p "$HOME/android-tools"
 
           unzip -q \
             "$HOME/cmdline-tools.zip" \
-            -d "$CMDLINE_DIR"
+            -d "$HOME/android-tools"
 
           mkdir -p "$SDK_ROOT/cmdline-tools/latest"
 
           cp -r \
-            "$CMDLINE_DIR/cmdline-tools/." \
+            "$HOME/android-tools/cmdline-tools/." \
             "$SDK_ROOT/cmdline-tools/latest/"
 
           SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
 
-          echo "Checking sdkmanager..."
-
           if [ ! -f "$SDKMANAGER" ]; then
             echo "ERROR: sdkmanager not found"
-
-            find "$SDK_ROOT" \
-              -type f \
-              -name "sdkmanager" \
-              -print
-
+            find "$SDK_ROOT" -name sdkmanager -print
             exit 1
           fi
 
           chmod +x "$SDKMANAGER"
 
-          echo "sdkmanager:"
+          echo "sdkmanager found:"
           "$SDKMANAGER" --version
-
-          echo "Creating Android licenses..."
 
           mkdir -p "$SDK_ROOT/licenses"
 
-          cat > "$SDK_ROOT/licenses/android-sdk-license" <<'EOF'
-24333f8a63b6825ea9c5514f83c2829b004d1fee
-d56f5187479451eabf01fb78af6dfcb131a6481e
-EOF
-
-          echo "Exporting Android environment..."
-
-          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROIDSDK=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROIDAPI=35" >> "$GITHUB_ENV"
-          echo "ANDROIDMINAPI=23" >> "$GITHUB_ENV"
-
-          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
-          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-
-          echo "Accepting licenses..."
+          printf '%s\n' \
+            "24333f8a63b6825ea9c5514f83c2829b004d1fee" \
+            "d56f5187479451eabf01fb78af6dfcb131a6481e" \
+            > "$SDK_ROOT/licenses/android-sdk-license"
 
           yes | "$SDKMANAGER" \
             --sdk_root="$SDK_ROOT" \
             --licenses || true
-
-          echo "Installing SDK components..."
 
           "$SDKMANAGER" \
             --sdk_root="$SDK_ROOT" \
@@ -180,25 +126,11 @@ EOF
             "platforms;android-35" \
             "build-tools;35.0.0"
 
-          echo "Checking Build Tools..."
-
-          if [ ! -d "$SDK_ROOT/build-tools/35.0.0" ]; then
-            echo "ERROR: Build Tools 35.0.0 not installed"
-            exit 1
-          fi
-
-          echo "Checking AIDL..."
-
           AIDL="$SDK_ROOT/build-tools/35.0.0/aidl"
 
           if [ ! -f "$AIDL" ]; then
             echo "ERROR: AIDL not found"
-
-            find "$SDK_ROOT/build-tools" \
-              -type f \
-              -name "aidl" \
-              -print
-
+            find "$SDK_ROOT/build-tools" -name aidl -print
             exit 1
           fi
 
@@ -207,71 +139,47 @@ EOF
           echo "AIDL FOUND:"
           ls -lh "$AIDL"
 
-          echo "Android SDK preparation complete."
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROIDSDK=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROIDAPI=35" >> "$GITHUB_ENV"
+          echo "ANDROIDMINAPI=23" >> "$GITHUB_ENV"
 
-      - name: Verify Android SDK
-        shell: bash
+          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+
+      - name: Verify SDK
         run: |
-          set -e
-
           SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
-
-          echo "=============================="
-          echo "SDK VERIFICATION"
-          echo "=============================="
 
           echo "SDK:"
           echo "$SDK_ROOT"
 
-          echo
           echo "SDKMANAGER:"
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --version
 
-          echo
-          echo "BUILD TOOLS:"
+          echo "Build Tools:"
           ls -la "$SDK_ROOT/build-tools"
 
-          echo
-          echo "PLATFORMS:"
-          ls -la "$SDK_ROOT/platforms"
-
-          echo
           echo "AIDL:"
           ls -lh "$SDK_ROOT/build-tools/35.0.0/aidl"
 
       - name: Build APK
-        shell: bash
         run: |
-          set -e
-
-          echo "=============================="
-          echo "BUILDING APK"
-          echo "=============================="
-
           buildozer -v android debug
 
-      - name: Check Generated APK
+      - name: Check APK
         if: always()
-        shell: bash
         run: |
           echo "=============================="
           echo "GENERATED APK"
           echo "=============================="
 
-          if find bin -maxdepth 1 -type f -name "*.apk" | grep -q ".apk"; then
-            echo "APK FOUND"
+          if ls bin/*.apk >/dev/null 2>&1; then
             ls -lh bin/*.apk
           else
             echo "ERROR: APK WAS NOT GENERATED"
-
-            echo
-            echo "Searching for APK files..."
-
-            find . \
-              -type f \
-              \( -name "*.apk" -o -name "*.aab" \) \
-              -print
-
+            find . -type f -name "*.apk" -print
             exit 1
           fi
 
