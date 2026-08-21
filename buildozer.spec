@@ -19,7 +19,6 @@ android.minapi = 23
 
 android.ndk = 28.2.13676358
 android.ndk_path = /usr/local/lib/android/sdk/ndk/28.2.13676358
-
 android.sdk_path = /usr/local/lib/android/sdk
 
 android.ndk_api = 23
