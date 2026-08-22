@@ -76,8 +76,8 @@ jobs:
           echo "ANDROID_NDK_ROOT=$NDK" >> "$GITHUB_ENV"
 
           echo "ANDROIDAPI=35" >> "$GITHUB_ENV"
-          echo "ANDROIDMINAPI=23" >> "$GITHUB_ENV"
-          echo "NDKAPI=23" >> "$GITHUB_ENV"
+          echo "ANDROIDMINAPI=24" >> "$GITHUB_ENV"
+          echo "NDKAPI=24" >> "$GITHUB_ENV"
 
       # 08 VERIFY PATH
       - name: 08 - Verify Android paths
