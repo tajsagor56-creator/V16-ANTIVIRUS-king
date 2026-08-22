@@ -125,8 +125,9 @@ jobs:
           python -m pip install --upgrade pip
 
           python -m pip install \
-            buildozer==1.5.0 \
-            cython==0.29.37
+            buildozer==1.6.0 \
+            setuptools \
+            cython==0.29.34
 
       # 10 PROJECT CHECK
       - name: 10 - Check project
