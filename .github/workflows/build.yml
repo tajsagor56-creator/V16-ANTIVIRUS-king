@@ -23,7 +23,7 @@ jobs:
           python-version: "3.11"
 
       # 03 JAVA
-      - name: 03 - Setup Java 17
+      - name: 03 - Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -33,108 +33,144 @@ jobs:
       - name: 04 - Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # 05 SDK COMPONENTS
-      - name: 05 - Install Android SDK components
+      # 05 SDK PACKAGES
+      - name: 05 - Install Android SDK
         shell: bash
         run: |
           set -e
+
           yes | sdkmanager --licenses || true
-          sdkmanager "platform-tools"
-          sdkmanager "platforms;android-35"
-          sdkmanager "build-tools;35.0.0"
-          sdkmanager "cmdline-tools;latest"
 
-      # 06 LEGACY SDKMANAGER FIX
-      - name: 06 - Fix legacy sdkmanager path
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "cmdline-tools;latest"
+
+      # 06 NDK 28.2
+      - name: 06 - Install NDK 28.2.13676358
         shell: bash
         run: |
           set -e
-          mkdir -p "$ANDROID_HOME/tools/bin"
-          ln -sf "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "$ANDROID_HOME/tools/bin/sdkmanager"
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$ANDROID_HOME/tools/bin" >> "$GITHUB_PATH"
 
-      # 07 NDK
-      - name: 07 - Install Android NDK 28.2
-        shell: bash
-        run: |
-          set -e
           sdkmanager "ndk;28.2.13676358"
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
-          echo "ANDROIDNDK=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
 
-      # 08 VERIFY ANDROID
-      - name: 08 - Verify Android environment
+      # 07 FORCE SDK NDK PATH
+      - name: 07 - Force Android SDK and NDK
         shell: bash
         run: |
           set -e
+
+          SDK="$ANDROID_HOME"
+          NDK="$ANDROID_HOME/ndk/28.2.13676358"
+
+          echo "ANDROIDSDK=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+
+          echo "ANDROIDNDK=$NDK" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK=$NDK" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
+
+          # IMPORTANT:
+          # Remove conflicting old NDK variables
+          echo "ANDROID_NDK_ROOT=$NDK" >> "$GITHUB_ENV"
+
+          echo "ANDROIDAPI=35" >> "$GITHUB_ENV"
+          echo "ANDROIDMINAPI=23" >> "$GITHUB_ENV"
+          echo "NDKAPI=23" >> "$GITHUB_ENV"
+
+      # 08 VERIFY PATH
+      - name: 08 - Verify Android paths
+        shell: bash
+        run: |
+          set -e
+
           echo "=========================================="
-          echo "ANDROID ENVIRONMENT"
+          echo "ANDROID PATH CHECK"
           echo "=========================================="
+
           echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          echo "ANDROIDSDK=$ANDROIDSDK"
+          echo "ANDROIDNDK=$ANDROIDNDK"
           echo "ANDROID_NDK=$ANDROID_NDK"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT"
+
           echo
           echo "SDKMANAGER:"
           which sdkmanager
           sdkmanager --version
-          echo
-          echo "JAVA:"
-          java -version
-          echo
-          echo "PYTHON:"
-          python --version
+
           echo
           echo "NDK:"
-          test -f "$ANDROID_NDK_HOME/source.properties"
-          grep "Pkg.Revision" "$ANDROID_NDK_HOME/source.properties"
+          test -f "$ANDROIDNDK/source.properties"
+
+          grep "Pkg.Revision" \
+            "$ANDROIDNDK/source.properties"
+
+          echo
+          echo "CHECK OLD NDK:"
+          if [ -d "$ANDROID_HOME/ndk/27.3.13750724" ]; then
+            echo "WARNING: old NDK 27.3 exists, but it will NOT be used."
+          else
+            echo "Old NDK 27.3 not present."
+          fi
 
       # 09 PYTHON BUILD TOOLS
-      - name: 09 - Install Buildozer dependencies
+      - name: 09 - Install Buildozer
         shell: bash
         run: |
           set -e
+
           python -m pip install --upgrade pip
+
           python -m pip install \
             buildozer==1.5.0 \
             cython==0.29.37
 
       # 10 PROJECT CHECK
-      - name: 10 - Check project files
+      - name: 10 - Check project
         shell: bash
         run: |
           set -e
-          echo "=========================================="
-          echo "PROJECT FILES"
-          echo "=========================================="
+
           test -f main.py
           test -f buildozer.spec
-          echo "main.py found"
-          echo "buildozer.spec found"
 
-      # 11 CLEAN
-      - name: 11 - Clean old Buildozer files
-        shell: bash
-        run: |
-          set -e
-          rm -rf .buildozer
-          rm -rf bin
-          mkdir -p bin
+          echo "main.py OK"
+          echo "buildozer.spec OK"
 
-      # 12 BUILD
-      - name: 12 - Build APK
+      # 11 CHECK SPEC
+      - name: 11 - Show Buildozer configuration
         shell: bash
-        env:
-          ANDROIDSDK: ${{ env.ANDROID_HOME }}
-          ANDROIDNDK: ${{ env.ANDROID_NDK_HOME }}
-          ANDROIDAPI: "35"
-          ANDROIDMINAPI: "23"
         run: |
           set -e
 
           echo "=========================================="
-          echo "BUILDOZER BUILD"
+          echo "BUILDOZER SPEC"
+          echo "=========================================="
+
+          cat buildozer.spec
+
+      # 12 CLEAN
+      - name: 12 - Clean Buildozer
+        shell: bash
+        run: |
+          set -e
+
+          rm -rf .buildozer
+          rm -rf bin
+
+          mkdir -p bin
+
+      # 13 BUILD APK
+      - name: 13 - Build APK
+        shell: bash
+        run: |
+          set -e
+
+          echo "=========================================="
+          echo "BUILDING V16 ANTIVIRUS"
           echo "=========================================="
 
           echo "Python:"
@@ -145,45 +181,66 @@ jobs:
           buildozer --version
 
           echo
-          echo "ANDROID_HOME:"
-          echo "$ANDROID_HOME"
+          echo "ANDROIDSDK:"
+          echo "$ANDROIDSDK"
 
           echo
-          echo "ANDROID_NDK_HOME:"
-          echo "$ANDROID_NDK_HOME"
+          echo "ANDROIDNDK:"
+          echo "$ANDROIDNDK"
+
+          echo
+          echo "ANDROID_NDK_ROOT:"
+          echo "$ANDROID_NDK_ROOT"
+
+          echo
+          echo "ANDROID API:"
+          echo "$ANDROIDAPI"
+
+          echo
+          echo "MIN API:"
+          echo "$ANDROIDMINAPI"
 
           echo
           echo "NDK VERSION:"
-          grep "Pkg.Revision" "$ANDROID_NDK_HOME/source.properties"
+          grep "Pkg.Revision" \
+            "$ANDROIDNDK/source.properties"
 
           echo
-          echo "SDKMANAGER:"
-          which sdkmanager
-          sdkmanager --version
-
-          echo
-          echo "Starting APK build..."
+          echo "=========================================="
+          echo "START BUILD"
+          echo "=========================================="
 
           buildozer -v android debug
 
-      # 13 SHOW APK
-      - name: 13 - Show APK
+      # 14 CHECK APK
+      - name: 14 - Check APK
         shell: bash
         run: |
           set -e
+
           echo "=========================================="
-          echo "APK FILES"
+          echo "APK RESULT"
           echo "=========================================="
+
           find bin \
             -maxdepth 1 \
             -type f \
             -name "*.apk" \
             -print
 
-          test -n "$(find bin -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          APK="$(find bin -maxdepth 1 -type f -name '*.apk' -print -quit)"
 
-      # 14 UPLOAD APK
-      - name: 14 - Upload APK
+          if [ -z "$APK" ]; then
+            echo "ERROR: APK was not generated."
+            exit 1
+          fi
+
+          echo
+          echo "APK FOUND:"
+          echo "$APK"
+
+      # 15 UPLOAD APK
+      - name: 15 - Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: V16-Antivirus-Pro-APK
