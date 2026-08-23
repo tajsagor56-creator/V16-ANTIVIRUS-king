@@ -1,9 +1,5 @@
 [app]
 
-# ============================================================
-# V16 ANTIVIRUS PRO
-# ============================================================
-
 title = V16 Antivirus Pro
 package.name = v16antivirus
 package.domain = org.kingtaj
@@ -11,13 +7,13 @@ package.domain = org.kingtaj
 source.dir = .
 source.include_exts = py,json,png,jpg,jpeg,kv,atlas
 
-version = 16.2
+version = 16.3
 
 orientation = portrait
 fullscreen = 0
 
 # ============================================================
-# PYTHON / KIVY REQUIREMENTS
+# REQUIREMENTS
 # ============================================================
 
 requirements = python3,kivy
@@ -32,13 +28,13 @@ android.minapi = 24
 android.ndk = 28c
 android.ndk_api = 24
 
-android.archs = arm64-v8a,armeabi-v7a
+android.archs = arm64-v8a
 
 # ============================================================
-# PYTHON-FOR-ANDROID
+# BOOTSTRAP
 # ============================================================
 
-p4a.branch = master
+p4a.bootstrap = sdl2
 
 # ============================================================
 # PERMISSIONS
@@ -47,17 +43,17 @@ p4a.branch = master
 android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,POST_NOTIFICATIONS
 
 # ============================================================
-# SDK LICENSE
-# ============================================================
-
-android.accept_sdk_license = True
-
-# ============================================================
-# STORAGE / BACKUP
+# STORAGE
 # ============================================================
 
 android.private_storage = True
 android.allow_backup = False
+
+# ============================================================
+# SDK
+# ============================================================
+
+android.accept_sdk_license = True
 
 
 [buildozer]
