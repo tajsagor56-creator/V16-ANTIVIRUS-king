@@ -243,6 +243,20 @@ jobs:
             '^(android.api|android.minapi|android.ndk|android.ndk_api|android.archs)' \
             buildozer.spec || true
 
+          echo
+          echo "=========================================="
+          echo "NDK CHECK"
+          echo "=========================================="
+
+          test -d "${ANDROID_NDK}"
+          echo "NDK directory: OK"
+
+          if [ -x "${ANDROID_NDK}/ndk-build" ]; then
+            echo "ndk-build: OK"
+          else
+            echo "WARNING: ndk-build not found"
+          fi
+
       # =========================================================
       # 12 - Clean Previous Build
       # =========================================================
