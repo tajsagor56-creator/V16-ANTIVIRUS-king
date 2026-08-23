@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
 
       # =========================================================
-      # 02 - Setup Python 3.12
+      # 02 - Python
       # =========================================================
       - name: 02 - Setup Python
         uses: actions/setup-python@v5
@@ -27,7 +27,7 @@ jobs:
           python-version: "3.12"
 
       # =========================================================
-      # 03 - Setup Java 17
+      # 03 - Java 17
       # =========================================================
       - name: 03 - Setup Java
         uses: actions/setup-java@v4
@@ -36,7 +36,7 @@ jobs:
           java-version: "17"
 
       # =========================================================
-      # 04 - Setup Android SDK
+      # 04 - Android SDK
       # =========================================================
       - name: 04 - Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -59,7 +59,7 @@ jobs:
             "ndk;28.2.13676358"
 
       # =========================================================
-      # 06 - Configure Android Environment
+      # 06 - Android Environment
       # =========================================================
       - name: 06 - Configure Android environment
         shell: bash
@@ -84,13 +84,13 @@ jobs:
       # =========================================================
       # 07 - Verify Environment
       # =========================================================
-      - name: 07 - Verify Android environment
+      - name: 07 - Verify Environment
         shell: bash
         run: |
           set -euxo pipefail
 
           echo "=========================================="
-          echo "ANDROID BUILD ENVIRONMENT"
+          echo "BUILD ENVIRONMENT"
           echo "=========================================="
 
           python --version
@@ -100,7 +100,6 @@ jobs:
 
           echo
           echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
           echo "ANDROID_NDK=$ANDROID_NDK"
           echo "ANDROIDAPI=$ANDROIDAPI"
           echo "ANDROIDMINAPI=$ANDROIDMINAPI"
@@ -110,31 +109,41 @@ jobs:
           test -d "$ANDROID_HOME/build-tools/35.0.0"
           test -d "$ANDROID_HOME/ndk/28.2.13676358"
 
-          echo
-          echo "NDK VERSION:"
-          grep "Pkg.Revision" \
-            "$ANDROID_HOME/ndk/28.2.13676358/source.properties"
-
       # =========================================================
-      # 08 - Install Build Dependencies
+      # 08 - Install Buildozer
       # =========================================================
       - name: 08 - Install Build Dependencies
         shell: bash
         run: |
           set -euxo pipefail
 
-          python -m pip install --upgrade "pip<25"
+          python -m pip install --upgrade pip
 
           python -m pip install \
             buildozer==1.6.0 \
             setuptools \
-            wheel \
-            "cython==0.29.34"
+            wheel
 
       # =========================================================
-      # 09 - Verify Project
+      # 09 - Verify p4a version
       # =========================================================
-      - name: 09 - Verify project
+      - name: 09 - Verify python-for-android
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          python -m pip install \
+            python-for-android==2026.5.9
+
+          python -m pythonforandroid.toolchain --help >/dev/null
+
+          echo "python-for-android:"
+          python -m pip show python-for-android
+
+      # =========================================================
+      # 10 - Verify Project
+      # =========================================================
+      - name: 10 - Verify project
         shell: bash
         run: |
           set -euxo pipefail
@@ -146,9 +155,9 @@ jobs:
           echo "buildozer.spec: OK"
 
       # =========================================================
-      # 10 - Show Build Configuration
+      # 11 - Show Configuration
       # =========================================================
-      - name: 10 - Show configuration
+      - name: 11 - Show configuration
         shell: bash
         run: |
           set -euxo pipefail
@@ -169,15 +178,22 @@ jobs:
 
           echo
           echo "=========================================="
-          echo "BUILDOZER SPEC"
+          echo "P4A"
+          echo "=========================================="
+
+          python -m pip show python-for-android
+
+          echo
+          echo "=========================================="
+          echo "SPEC"
           echo "=========================================="
 
           cat buildozer.spec
 
       # =========================================================
-      # 11 - Clean Previous Build
+      # 12 - Clean
       # =========================================================
-      - name: 11 - Clean previous build
+      - name: 12 - Clean previous build
         shell: bash
         run: |
           set -euxo pipefail
@@ -188,13 +204,14 @@ jobs:
           mkdir -p bin
 
       # =========================================================
-      # 12 - Build APK
+      # 13 - Build APK
       # =========================================================
-      - name: 12 - Build APK
+      - name: 13 - Build APK
         shell: bash
         env:
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
           PIP_NO_CACHE_DIR: "1"
+
         run: |
           set -euxo pipefail
 
@@ -207,12 +224,12 @@ jobs:
           python --version
 
           echo
-          echo "Pip:"
-          python -m pip --version
-
-          echo
           echo "Buildozer:"
           buildozer --version
+
+          echo
+          echo "P4A:"
+          python -m pip show python-for-android
 
           echo
           echo "Android SDK:"
@@ -227,16 +244,12 @@ jobs:
           echo "$ANDROIDAPI"
 
           echo
-          echo "Android Min API:"
+          echo "Minimum API:"
           echo "$ANDROIDMINAPI"
 
           echo
-          echo "NDK API:"
-          echo "$NDKAPI"
-
-          echo
           echo "=========================================="
-          echo "BUILD CONFIG"
+          echo "SPEC REQUIREMENTS"
           echo "=========================================="
 
           grep -E \
@@ -245,15 +258,15 @@ jobs:
 
           echo
           echo "=========================================="
-          echo "STARTING BUILD"
+          echo "START BUILD"
           echo "=========================================="
 
           buildozer -v android debug
 
       # =========================================================
-      # 13 - Verify APK
+      # 14 - Verify APK
       # =========================================================
-      - name: 13 - Verify APK
+      - name: 14 - Verify APK
         shell: bash
         run: |
           set -euxo pipefail
@@ -284,9 +297,9 @@ jobs:
           ls -lh "$APK"
 
       # =========================================================
-      # 14 - Upload APK
+      # 15 - Upload APK
       # =========================================================
-      - name: 14 - Upload APK
+      - name: 15 - Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: V16-Antivirus-Pro-APK
