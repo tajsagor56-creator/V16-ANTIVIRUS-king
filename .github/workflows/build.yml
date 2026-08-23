@@ -259,11 +259,10 @@ jobs:
           else
             echo "WARNING: ndk-build not found"
           fi
-
       # =========================================================
       # 12 - Clean Previous Build
       # =========================================================
-      - name: 12 - Clean previous build
+      - name: 12 - Clean Previous Build
         shell: bash
         run: |
           set -euxo pipefail
@@ -289,7 +288,8 @@ jobs:
           fi
 
           echo ".buildozer: clean"
-          echo "bin: ready
+          echo "bin: ready"
+      #
           
       # =========================================================
       # 13 - Build APK
