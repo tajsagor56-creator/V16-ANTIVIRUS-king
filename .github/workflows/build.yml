@@ -326,11 +326,88 @@ jobs:
 
           echo
           echo "Android API:"
-          echo "${ANDROIDAPI}"
+
+      # =========================================================
+      # 12 - Clean Previous Build
+      # =========================================================
+      - name: 12 - Clean Previous Build
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          echo "=========================================="
+          echo "CLEAN BUILD"
+          echo "=========================================="
+
+          rm -rf .buildozer
+          rm -rf bin
+
+          mkdir -p bin
+
+          echo
+          echo "Build cache cleaned."
+
+          echo
+          echo "Checking for stale build environments..."
+
+          if [ -d ".buildozer" ]; then
+            echo "ERROR: .buildozer still exists."
+            exit 1
+          fi
+
+          echo ".buildozer: clean"
+
+          if [ -d "bin" ]; then
+            echo "bin: ready"
+          else
+            echo "ERROR: bin directory was not created."
+            exit 1
+          fi
+
+      # =========================================================
+      # 13 - Build APK
+      # =========================================================
+      - name: 13 - Build APK
+        shell: bash
+        env:
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
+          PIP_NO_CACHE_DIR: "1"
+          PYTHONUNBUFFERED: "1"
+
+        run: |
+          set -euxo pipefail
+
+          echo "=========================================="
+          echo "V16 ANTIVIRUS APK BUILD"
+          echo "=========================================="
+
+          echo
+          echo "Python:"
+          python --version
+
+          echo
+          echo "Buildozer:"
+          buildozer --version
+
+          echo
+          echo "Java:"
+          java -version
+
+          echo
+          echo "Android SDK:"
+          echo "${ANDROID_HOME:-not-set}"
+
+          echo
+          echo "Android NDK:"
+          echo "${ANDROID_NDK:-not-set}"
+
+          echo
+          echo "Android API:"
+          echo "${ANDROIDAPI:-not-set}"
 
           echo
           echo "Minimum API:"
-          echo "${ANDROIDMINAPI}"
+          echo "${ANDROIDMINAPI:-not-set}"
 
           echo
           echo "=========================================="
@@ -343,14 +420,9 @@ jobs:
 
           echo
           echo "=========================================="
-          echo "PIP COMPATIBILITY"
+          echo "SYSTEM PIP"
           echo "=========================================="
 
-          export PIP_VERSION_CHECK=0
-          export PIP_DISABLE_PIP_VERSION_CHECK=1
-
-          echo
-          echo "System pip:"
           python -m pip --version
 
           echo
