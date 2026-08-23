@@ -16,7 +16,7 @@ fullscreen = 0
 # REQUIREMENTS
 # ============================================================
 
-requirements = python3,kivy
+requirements = python3,kivy,charset-normalizer==2.1.1
 
 # ============================================================
 # ANDROID
