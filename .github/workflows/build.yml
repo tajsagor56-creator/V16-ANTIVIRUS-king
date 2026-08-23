@@ -25,6 +25,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
 
       # =========================================================
       # 03 - Java 17
@@ -44,7 +45,7 @@ jobs:
       # =========================================================
       # 05 - Install Android SDK / NDK
       # =========================================================
-      - name: 05 - Install Android SDK
+      - name: 05 - Install Android SDK and NDK
         shell: bash
         run: |
           set -euxo pipefail
@@ -59,27 +60,29 @@ jobs:
             "ndk;28.2.13676358"
 
       # =========================================================
-      # 06 - Android Environment
+      # 06 - Configure Android Environment
       # =========================================================
       - name: 06 - Configure Android environment
         shell: bash
         run: |
           set -euxo pipefail
 
-          SDK="$ANDROID_HOME"
-          NDK="$ANDROID_HOME/ndk/28.2.13676358"
+          SDK="${ANDROID_HOME}"
+          NDK="${ANDROID_HOME}/ndk/28.2.13676358"
 
-          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=${SDK}" >> "${GITHUB_ENV}"
+          echo "ANDROID_SDK_ROOT=${SDK}" >> "${GITHUB_ENV}"
 
-          echo "ANDROIDNDK=$NDK" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK=$NDK" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_ROOT=$NDK" >> "$GITHUB_ENV"
+          echo "ANDROIDNDK=${NDK}" >> "${GITHUB_ENV}"
+          echo "ANDROID_NDK=${NDK}" >> "${GITHUB_ENV}"
+          echo "ANDROID_NDK_HOME=${NDK}" >> "${GITHUB_ENV}"
+          echo "ANDROID_NDK_ROOT=${NDK}" >> "${GITHUB_ENV}"
 
-          echo "ANDROIDAPI=35" >> "$GITHUB_ENV"
-          echo "ANDROIDMINAPI=24" >> "$GITHUB_ENV"
-          echo "NDKAPI=24" >> "$GITHUB_ENV"
+          echo "ANDROIDAPI=35" >> "${GITHUB_ENV}"
+          echo "ANDROIDMINAPI=24" >> "${GITHUB_ENV}"
+          echo "NDKAPI=24" >> "${GITHUB_ENV}"
+
+          echo "PYTHONUNBUFFERED=1" >> "${GITHUB_ENV}"
 
       # =========================================================
       # 07 - Verify Environment
@@ -93,60 +96,60 @@ jobs:
           echo "BUILD ENVIRONMENT"
           echo "=========================================="
 
+          echo
+          echo "Python:"
           python --version
           python -m pip --version
+
+          echo
+          echo "Java:"
           java -version
+
+          echo
+          echo "SDK:"
           sdkmanager --version
 
           echo
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_NDK=$ANDROID_NDK"
-          echo "ANDROIDAPI=$ANDROIDAPI"
-          echo "ANDROIDMINAPI=$ANDROIDMINAPI"
-          echo "NDKAPI=$NDKAPI"
+          echo "ANDROID_HOME=${ANDROID_HOME}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"
+          echo "ANDROID_NDK=${ANDROID_NDK}"
+          echo "ANDROIDAPI=${ANDROIDAPI}"
+          echo "ANDROIDMINAPI=${ANDROIDMINAPI}"
+          echo "NDKAPI=${NDKAPI}"
 
-          test -d "$ANDROID_HOME/platforms/android-35"
-          test -d "$ANDROID_HOME/build-tools/35.0.0"
-          test -d "$ANDROID_HOME/ndk/28.2.13676358"
+          echo
+          echo "NDK:"
+          test -d "${ANDROID_NDK}"
+          echo "NDK directory OK"
 
       # =========================================================
-      # 08 - Install Buildozer
+      # 08 - Install Build Dependencies
       # =========================================================
       - name: 08 - Install Build Dependencies
         shell: bash
         run: |
           set -euxo pipefail
 
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools wheel
 
           python -m pip install \
-            buildozer==1.6.0 \
-            setuptools \
-            wheel
+            buildozer==1.6.0
+
+          echo
+          echo "Buildozer:"
+          buildozer --version
 
       # =========================================================
-      # 09 - Verify p4a version
+      # 09 - Verify Project
       # =========================================================
-      - name: 09 - Verify python-for-android
+      - name: 09 - Verify Project
         shell: bash
         run: |
           set -euxo pipefail
 
-          python -m pip install \
-            python-for-android==2026.5.9
-
-          python -m pythonforandroid.toolchain --help >/dev/null
-
-          echo "python-for-android:"
-          python -m pip show python-for-android
-
-      # =========================================================
-      # 10 - Verify Project
-      # =========================================================
-      - name: 10 - Verify project
-        shell: bash
-        run: |
-          set -euxo pipefail
+          echo "=========================================="
+          echo "VERIFY PROJECT"
+          echo "=========================================="
 
           test -f main.py
           test -f buildozer.spec
@@ -154,22 +157,23 @@ jobs:
           echo "main.py: OK"
           echo "buildozer.spec: OK"
 
+          echo
+          echo "=========================================="
+          echo "BUILD SPEC"
+          echo "=========================================="
+
+          grep -E \
+            '^(title|package.name|package.domain|version|requirements|orientation|android.api|android.minapi|android.ndk|android.ndk_api|android.archs|android.permissions|android.private_storage|android.allow_backup)' \
+            buildozer.spec || true
+
       # =========================================================
-      # 11 - Show Configuration
+      # 10 - Verify Buildozer
       # =========================================================
-      - name: 11 - Show configuration
+      - name: 10 - Verify Buildozer
         shell: bash
         run: |
           set -euxo pipefail
 
-          echo "=========================================="
-          echo "PYTHON"
-          echo "=========================================="
-
-          python --version
-          python -m pip --version
-
-          echo
           echo "=========================================="
           echo "BUILDOZER"
           echo "=========================================="
@@ -177,34 +181,99 @@ jobs:
           buildozer --version
 
           echo
+          echo "Buildozer location:"
+          command -v buildozer
+
+          echo
+          echo "Python:"
+          python --version
+
+          echo
+          echo "Pip:"
+          python -m pip --version
+
+      # =========================================================
+      # 11 - Show Configuration
+      # =========================================================
+      - name: 11 - Show Configuration
+        shell: bash
+        run: |
+          set -euxo pipefail
+
           echo "=========================================="
-          echo "P4A"
+          echo "CONFIGURATION"
           echo "=========================================="
 
-          python -m pip show python-for-android
+          echo
+          echo "Python:"
+          python --version
+
+          echo
+          echo "Buildozer:"
+          buildozer --version
+
+          echo
+          echo "Android SDK:"
+          echo "${ANDROID_HOME}"
+
+          echo
+          echo "Android NDK:"
+          echo "${ANDROID_NDK}"
+
+          echo
+          echo "Android API:"
+          echo "${ANDROIDAPI}"
+
+          echo
+          echo "Minimum API:"
+          echo "${ANDROIDMINAPI}"
 
           echo
           echo "=========================================="
-          echo "SPEC"
+          echo "REQUIREMENTS"
           echo "=========================================="
 
-          cat buildozer.spec
+          grep '^requirements' buildozer.spec || true
+
+          echo
+          echo "=========================================="
+          echo "ANDROID SETTINGS"
+          echo "=========================================="
+
+          grep -E \
+            '^(android.api|android.minapi|android.ndk|android.ndk_api|android.archs)' \
+            buildozer.spec || true
 
       # =========================================================
-      # 12 - Clean
+      # 12 - Clean Previous Build
       # =========================================================
       - name: 12 - Clean previous build
         shell: bash
         run: |
           set -euxo pipefail
 
+          echo "=========================================="
+          echo "CLEAN BUILD"
+          echo "=========================================="
+
           rm -rf .buildozer
           rm -rf bin
 
           mkdir -p bin
 
+          echo
           echo "Build cache cleaned."
-      
+
+          echo
+          echo "Checking for stale build environments..."
+
+          if [ -d ".buildozer" ]; then
+            echo "ERROR: .buildozer still exists."
+            exit 1
+          fi
+
+          echo ".buildozer: clean"
+          echo "bin: ready"
 
       # =========================================================
       # 13 - Build APK
@@ -214,6 +283,7 @@ jobs:
         env:
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
           PIP_NO_CACHE_DIR: "1"
+          PYTHONUNBUFFERED: "1"
 
         run: |
           set -euxo pipefail
@@ -231,24 +301,20 @@ jobs:
           buildozer --version
 
           echo
-          echo "P4A:"
-          python -m pip show python-for-android
-
-          echo
           echo "Android SDK:"
-          echo "$ANDROID_HOME"
+          echo "${ANDROID_HOME}"
 
           echo
           echo "Android NDK:"
-          echo "$ANDROID_NDK"
+          echo "${ANDROID_NDK}"
 
           echo
           echo "Android API:"
-          echo "$ANDROIDAPI"
+          echo "${ANDROIDAPI}"
 
           echo
           echo "Minimum API:"
-          echo "$ANDROIDMINAPI"
+          echo "${ANDROIDMINAPI}"
 
           echo
           echo "=========================================="
@@ -256,12 +322,12 @@ jobs:
           echo "=========================================="
 
           grep -E \
-            '^(requirements|android.api|android.minapi|android.ndk|android.ndk_api|android.archs|p4a.branch|p4a.commit)' \
+            '^(requirements|android.api|android.minapi|android.ndk|android.ndk_api|android.archs)' \
             buildozer.spec || true
 
           echo
           echo "=========================================="
-          echo "START BUILD"
+          echo "STARTING BUILDOZER"
           echo "=========================================="
 
           buildozer -v android debug
@@ -278,6 +344,13 @@ jobs:
           echo "APK RESULT"
           echo "=========================================="
 
+          echo
+          echo "Files in bin:"
+          ls -lah bin || true
+
+          echo
+          echo "Searching for APK..."
+
           find bin \
             -maxdepth 1 \
             -type f \
@@ -286,18 +359,25 @@ jobs:
 
           APK="$(find bin -maxdepth 1 -type f -name '*.apk' -print -quit)"
 
-          if [ -z "$APK" ]; then
+          if [ -z "${APK}" ]; then
+            echo
             echo "ERROR: APK was not generated."
+            echo
+            echo "Contents of bin:"
+            ls -lah bin || true
             exit 1
           fi
 
           echo
-          echo "APK FOUND:"
-          echo "$APK"
+          echo "=========================================="
+          echo "APK FOUND"
+          echo "=========================================="
+
+          echo "${APK}"
 
           echo
           echo "APK SIZE:"
-          ls -lh "$APK"
+          ls -lh "${APK}"
 
       # =========================================================
       # 15 - Upload APK
