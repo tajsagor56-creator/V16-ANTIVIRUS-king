@@ -7,7 +7,7 @@ package.domain = org.kingtaj
 source.dir = .
 source.include_exts = py,json,png,jpg,jpeg,kv,atlas
 
-version = 16.3
+version = 16.2
 
 orientation = portrait
 fullscreen = 0
@@ -28,13 +28,14 @@ android.minapi = 24
 android.ndk = 28c
 android.ndk_api = 24
 
-android.archs = arm64-v8a
+android.archs = arm64-v8a,armeabi-v7a
 
 # ============================================================
-# BOOTSTRAP
+# PYTHON-FOR-ANDROID
 # ============================================================
 
-p4a.bootstrap = sdl2
+p4a.branch = master
+p4a.commit = 2026.05.09
 
 # ============================================================
 # PERMISSIONS
