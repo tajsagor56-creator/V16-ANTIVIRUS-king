@@ -129,7 +129,7 @@ jobs:
         run: |
           set -euxo pipefail
 
-          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install "pip<26" setuptools wheel
 
           python -m pip install \
             buildozer==1.6.0
@@ -138,6 +138,10 @@ jobs:
           echo "Buildozer:"
           buildozer --version
 
+          echo
+          echo "Pip:"
+          python -m pip --version
+          
       # =========================================================
       # 09 - Verify Project
       # =========================================================
@@ -337,6 +341,14 @@ jobs:
           grep -E \
             '^(requirements|android.api|android.minapi|android.ndk|android.ndk_api|android.archs)' \
             buildozer.spec || true
+            
+          echo
+          echo "=========================================="
+          echo "PIP COMPATIBILITY"
+          echo "=========================================="
+
+          export PIP_VERSION_CHECK=0
+          export PIP_DISABLE_PIP_VERSION_CHECK=1
 
           echo
           echo "=========================================="
