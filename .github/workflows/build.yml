@@ -19,24 +19,24 @@ jobs:
         uses: actions/checkout@v4
 
       # =========================================================
-      # 02 - Python
+      # 02 - Setup Python 3.12
       # =========================================================
-      - name: 02 - Setup Python
+      - name: 02 - Setup Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       # =========================================================
-      # 03 - Java 17
+      # 03 - Setup Java 17
       # =========================================================
-      - name: 03 - Setup Java
+      - name: 03 - Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
       # =========================================================
-      # 04 - Android SDK
+      # 04 - Setup Android SDK
       # =========================================================
       - name: 04 - Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -99,6 +99,8 @@ jobs:
           echo "Python:"
           python --version
           python -m pip --version
+          which python
+          which python3
 
           echo
           echo "Java:"
@@ -129,18 +131,26 @@ jobs:
         run: |
           set -euxo pipefail
 
-          python -m pip install --upgrade "pip>=23.0" "setuptools>=68.0" "wheel>=0.41.0"
+          python -m pip install --upgrade \
+            "pip<26" \
+            "setuptools<81" \
+            "wheel"
 
           python -m pip install \
-            buildozer==1.6.0
+            "buildozer==1.6.0"
+
           echo
           echo "Buildozer:"
           buildozer --version
 
           echo
+          echo "Python:"
+          python --version
+
+          echo
           echo "Pip:"
           python -m pip --version
-          
+
       # =========================================================
       # 09 - Verify Project
       # =========================================================
@@ -160,10 +170,7 @@ jobs:
           echo "buildozer.spec: OK"
 
           echo
-          echo "=========================================="
-          echo "BUILD SPEC"
-          echo "=========================================="
-
+          echo "BUILD SPEC:"
           grep -E \
             '^(title|package.name|package.domain|version|requirements|orientation|android.api|android.minapi|android.ndk|android.ndk_api|android.archs|android.permissions|android.private_storage|android.allow_backup)' \
             buildozer.spec || true
@@ -246,19 +253,6 @@ jobs:
             '^(android.api|android.minapi|android.ndk|android.ndk_api|android.archs)' \
             buildozer.spec || true
 
-          echo
-          echo "=========================================="
-          echo "NDK CHECK"
-          echo "=========================================="
-
-          test -d "${ANDROID_NDK}"
-          echo "NDK directory: OK"
-
-          if [ -x "${ANDROID_NDK}/ndk-build" ]; then
-            echo "ndk-build: OK"
-          else
-            echo "WARNING: ndk-build not found"
-          fi
       # =========================================================
       # 12 - Clean Previous Build
       # =========================================================
@@ -276,93 +270,15 @@ jobs:
 
           mkdir -p bin
 
-          echo
-          echo "Build cache cleaned."
-
-          echo
-          echo "Checking for stale build environments..."
+          echo ".buildozer removed"
+          echo "bin recreated"
 
           if [ -d ".buildozer" ]; then
-            echo "ERROR: .buildozer still exists."
+            echo "ERROR: .buildozer still exists"
             exit 1
           fi
 
-          echo ".buildozer: clean"
-          echo "bin: ready"
-      #
-          
-      # =========================================================
-      # 13 - Build APK
-      # =========================================================
-      - name: 13 - Build APK
-        shell: bash
-        env:
-          PIP_DISABLE_PIP_VERSION_CHECK: "1"
-          PIP_NO_CACHE_DIR: "1"
-          PYTHONUNBUFFERED: "1"
-
-        run: |
-          set -euxo pipefail
-
-          echo "=========================================="
-          echo "V16 ANTIVIRUS APK BUILD"
-          echo "=========================================="
-
-          echo
-          echo "Python:"
-          python --version
-
-          echo
-          echo "Buildozer:"
-          buildozer --version
-
-          echo
-          echo "Android SDK:"
-          echo "${ANDROID_HOME}"
-
-          echo
-          echo "Android NDK:"
-          echo "${ANDROID_NDK}"
-
-          echo
-          echo "Android API:"
-
-      # =========================================================
-      # 12 - Clean Previous Build
-      # =========================================================
-      - name: 12 - Clean Previous Build
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          echo "=========================================="
-          echo "CLEAN BUILD"
-          echo "=========================================="
-
-          rm -rf .buildozer
-          rm -rf bin
-
-          mkdir -p bin
-
-          echo
-          echo "Build cache cleaned."
-
-          echo
-          echo "Checking for stale build environments..."
-
-          if [ -d ".buildozer" ]; then
-            echo "ERROR: .buildozer still exists."
-            exit 1
-          fi
-
-          echo ".buildozer: clean"
-
-          if [ -d "bin" ]; then
-            echo "bin: ready"
-          else
-            echo "ERROR: bin directory was not created."
-            exit 1
-          fi
+          echo "Clean build environment ready"
 
       # =========================================================
       # 13 - Build APK
@@ -382,8 +298,12 @@ jobs:
           echo "=========================================="
 
           echo
-          echo "Python:"
+          echo "Host Python:"
           python --version
+
+          echo
+          echo "Host Python executable:"
+          which python
 
           echo
           echo "Buildozer:"
@@ -395,35 +315,26 @@ jobs:
 
           echo
           echo "Android SDK:"
-          echo "${ANDROID_HOME:-not-set}"
+          echo "${ANDROID_HOME}"
 
           echo
           echo "Android NDK:"
-          echo "${ANDROID_NDK:-not-set}"
+          echo "${ANDROID_NDK}"
 
           echo
           echo "Android API:"
-          echo "${ANDROIDAPI:-not-set}"
+          echo "${ANDROIDAPI}"
 
           echo
           echo "Minimum API:"
-          echo "${ANDROIDMINAPI:-not-set}"
+          echo "${ANDROIDMINAPI}"
 
           echo
           echo "=========================================="
-          echo "SPEC REQUIREMENTS"
+          echo "BUILD REQUIREMENTS"
           echo "=========================================="
 
-          grep -E \
-            '^(requirements|android.api|android.minapi|android.ndk|android.ndk_api|android.archs)' \
-            buildozer.spec || true
-
-          echo
-          echo "=========================================="
-          echo "SYSTEM PIP"
-          echo "=========================================="
-
-          python -m pip --version
+          grep '^requirements' buildozer.spec || true
 
           echo
           echo "=========================================="
