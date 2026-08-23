@@ -129,11 +129,10 @@ jobs:
         run: |
           set -euxo pipefail
 
-          python -m pip install "pip<26" setuptools wheel
+          python -m pip install "pip<26" "setuptools<81" "wheel<1"
 
           python -m pip install \
             buildozer==1.6.0
-
           echo
           echo "Buildozer:"
           buildozer --version
@@ -290,19 +289,19 @@ jobs:
           fi
 
           echo ".buildozer: clean"
-          echo "bin: ready"
-
+          echo "bin: ready
+          
       # =========================================================
       # 13 - Build APK
       # =========================================================
       - name: 13 - Build APK
         shell: bash
         env:
-          PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
           PIP_NO_CACHE_DIR: "1"
           PYTHONUNBUFFERED: "1"
 
-        run: |
+         run: |
           set -euxo pipefail
 
           echo "=========================================="
@@ -339,25 +338,29 @@ jobs:
           echo "=========================================="
 
           grep -E \
-            '^(requirements|android.api|android.minapi|android.ndk|android.ndk_api|android.archs)' \
-            buildozer.spec || true
-            
-          echo
-          echo "=========================================="
-          echo "PIP COMPATIBILITY"
-          echo "=========================================="
+          '^(requirements|android.api|android.minapi|android.ndk|android.ndk_api|android.archs)' \
+           buildozer.spec || true
 
-          export PIP_VERSION_CHECK=0
-          export PIP_DISABLE_PIP_VERSION_CHECK=1
+           echo
+           echo "=========================================="
+           echo "PIP COMPATIBILITY"
+           echo "=========================================="
 
-          echo
-          echo "=========================================="
-          echo "STARTING BUILDOZER"
-          echo "=========================================="
+           export PIP_VERSION_CHECK=0
+           export PIP_DISABLE_PIP_VERSION_CHECK=1
 
-          buildozer -v android debug
+           echo
+           echo "System pip:"
+           python -m pip --version
 
-      # =========================================================
+           echo
+           echo "=========================================="
+           echo "STARTING BUILDOZER"
+           echo "=========================================="
+
+           buildozer -v android debug
+           
+     # =========================================================
       # 14 - Verify APK
       # =========================================================
       - name: 14 - Verify APK
