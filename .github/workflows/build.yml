@@ -297,11 +297,11 @@ jobs:
       - name: 13 - Build APK
         shell: bash
         env:
-      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
           PIP_NO_CACHE_DIR: "1"
           PYTHONUNBUFFERED: "1"
 
-         run: |
+        run: |
           set -euxo pipefail
 
           echo "=========================================="
@@ -338,29 +338,29 @@ jobs:
           echo "=========================================="
 
           grep -E \
-          '^(requirements|android.api|android.minapi|android.ndk|android.ndk_api|android.archs)' \
-           buildozer.spec || true
+            '^(requirements|android.api|android.minapi|android.ndk|android.ndk_api|android.archs)' \
+            buildozer.spec || true
 
-           echo
-           echo "=========================================="
-           echo "PIP COMPATIBILITY"
-           echo "=========================================="
+          echo
+          echo "=========================================="
+          echo "PIP COMPATIBILITY"
+          echo "=========================================="
 
-           export PIP_VERSION_CHECK=0
-           export PIP_DISABLE_PIP_VERSION_CHECK=1
+          export PIP_VERSION_CHECK=0
+          export PIP_DISABLE_PIP_VERSION_CHECK=1
 
-           echo
-           echo "System pip:"
-           python -m pip --version
+          echo
+          echo "System pip:"
+          python -m pip --version
 
-           echo
-           echo "=========================================="
-           echo "STARTING BUILDOZER"
-           echo "=========================================="
+          echo
+          echo "=========================================="
+          echo "STARTING BUILDOZER"
+          echo "=========================================="
 
-           buildozer -v android debug
-           
-     # =========================================================
+          buildozer -v android debug
+
+      # =========================================================
       # 14 - Verify APK
       # =========================================================
       - name: 14 - Verify APK
