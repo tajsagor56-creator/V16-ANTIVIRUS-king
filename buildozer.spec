@@ -34,7 +34,6 @@ android.archs = arm64-v8a,armeabi-v7a
 # PYTHON-FOR-ANDROID
 # ============================================================
 
-p4a.branch = master
 
 # ============================================================
 # PERMISSIONS
