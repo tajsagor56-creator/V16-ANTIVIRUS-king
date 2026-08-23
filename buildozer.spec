@@ -16,7 +16,7 @@ fullscreen = 0
 # REQUIREMENTS
 # ============================================================
 
-requirements = kivy,plyer,charset-normalizer
+requirements = kivy,plyer
 
 # ============================================================
 # ANDROID
