@@ -163,6 +163,27 @@ jobs:
           echo "$ANDROID_NDK"
 
           echo
+          echo "Android API:"
+          echo "$ANDROIDAPI"
+
+          echo
+          echo "Android Min API:"
+          echo "$ANDROIDMINAPI"
+
+          echo
+          echo "NDK API:"
+          echo "$NDKAPI"
+
+          echo
+          echo "=========================================="
+          echo "BUILD CONFIG"
+          echo "=========================================="
+
+          grep -E \
+            '^(requirements|android.api|android.minapi|android.ndk|android.ndk_api|android.archs|p4a.branch)' \
+            buildozer.spec || true
+
+          echo
           echo "=========================================="
           echo "STARTING BUILD"
           echo "=========================================="
