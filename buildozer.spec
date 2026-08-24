@@ -16,7 +16,7 @@ fullscreen = 0
 # REQUIREMENTS
 # ============================================================
 
-requirements = python3,kivy
+requirements = python3,kivy==2.3.1
 
 # ============================================================
 # ANDROID
@@ -28,7 +28,7 @@ android.minapi = 24
 android.ndk = 28c
 android.ndk_api = 24
 
-android.archs = arm64-v8a,armeabi-v7a
+android.archs = arm64-v8a
 
 # ============================================================
 # PERMISSIONS
