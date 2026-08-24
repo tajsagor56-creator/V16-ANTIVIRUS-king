@@ -16,7 +16,7 @@ fullscreen = 0
 # REQUIREMENTS
 # ============================================================
 
-requirements = kivy,plyer
+requirements = python3,kivy
 
 # ============================================================
 # ANDROID
