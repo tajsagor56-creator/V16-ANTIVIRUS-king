@@ -1,64 +1,55 @@
 # ============================================================
 # V16 ANTIVIRUS PRO
-# Version 16.3
+# Stable Mini Base - V16.4
 # ============================================================
 
 import os
-import json
 import time
 import hashlib
-import zipfile
 import threading
-from datetime import datetime
 
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.metrics import dp
+
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.uix.progressbar import ProgressBar
 from kivy.uix.scrollview import ScrollView
-from kivy.uix.popup import Popup
 
 
 # ============================================================
-# VARIABLES
+# APP
 # ============================================================
 
 APP_NAME = "V16 Antivirus Pro"
-VERSION = "16.3"
-CHUNK = 1024 * 1024
-MAX_HISTORY = 100
+VERSION = "16.4"
 
-BASE = os.path.dirname(os.path.abspath(__file__))
-HISTORY = os.path.join(BASE, "scan_history.json")
+CHUNK_SIZE = 1024 * 1024
 
-MALWARE = {
-    # "verified_sha256_hash_here",
+
+# ============================================================
+# KNOWN MALWARE SHA256
+# ============================================================
+
+KNOWN_MALWARE = {
+    # এখানে পরে verified SHA-256 hash যোগ করা হবে
 }
 
-PERMS = {
-    "SEND_SMS": 2,
-    "RECEIVE_SMS": 2,
-    "READ_SMS": 2,
-    "READ_CONTACTS": 1,
-    "WRITE_CONTACTS": 1,
-    "CALL_PHONE": 2,
-    "RECORD_AUDIO": 1,
-    "CAMERA": 1,
-    "ACCESS_FINE_LOCATION": 1,
-    "ACCESS_COARSE_LOCATION": 1,
-    "SYSTEM_ALERT_WINDOW": 2,
-    "RECEIVE_BOOT_COMPLETED": 1,
-    "WRITE_SETTINGS": 2,
-    "REQUEST_INSTALL_PACKAGES": 2,
-    "BIND_ACCESSIBILITY_SERVICE": 3,
-}
 
-BAD_EXT = {
-    ".exe", ".scr", ".bat", ".cmd",
-    ".vbs", ".ps1", ".pif"
+# ============================================================
+# SUSPICIOUS EXTENSIONS
+# ============================================================
+
+SUSPICIOUS_EXTENSIONS = {
+    ".exe",
+    ".scr",
+    ".bat",
+    ".cmd",
+    ".vbs",
+    ".ps1",
+    ".pif",
 }
 
 
@@ -66,191 +57,138 @@ BAD_EXT = {
 # SHA256
 # ============================================================
 
-def sha256(path):
-    try:
-        h = hashlib.sha256()
+def calculate_sha256(path):
 
-        with open(path, "rb") as f:
+    try:
+
+        sha = hashlib.sha256()
+
+        with open(path, "rb") as file:
+
             while True:
-                data = f.read(CHUNK)
+
+                data = file.read(CHUNK_SIZE)
 
                 if not data:
                     break
 
-                h.update(data)
+                sha.update(data)
 
-        return h.hexdigest()
+        return sha.hexdigest()
 
     except Exception:
+
         return None
 
 
 # ============================================================
-# APK ANALYZER
+# FILE SCAN
 # ============================================================
 
-def analyze_apk(path):
+def scan_file(path):
 
-    r = {
+    result = {
         "file": path,
-        "sha256": sha256(path),
-        "confirmed_malware": False,
+        "sha256": None,
+        "threat": False,
         "suspicious": False,
-        "risk_score": 0,
-        "permissions": [],
-        "reason": []
+        "reason": ""
     }
 
-    if r["sha256"] in MALWARE:
-        r["confirmed_malware"] = True
-        r["suspicious"] = True
-        r["risk_score"] = 10
-        r["reason"].append("Known malicious SHA-256")
+    file_hash = calculate_sha256(path)
 
-    try:
-        with zipfile.ZipFile(path, "r") as z:
+    result["sha256"] = file_hash
 
-            names = z.namelist()
+    if file_hash in KNOWN_MALWARE:
 
-            if "AndroidManifest.xml" not in names:
-                r["reason"].append("AndroidManifest.xml missing")
-                r["risk_score"] += 3
+        result["threat"] = True
+        result["reason"] = "Known malware SHA-256"
 
-            if not any(
-                x.startswith("classes") and x.endswith(".dex")
-                for x in names
-            ):
-                r["reason"].append("classes.dex missing")
-                r["risk_score"] += 2
+        return result
 
-            try:
-                data = z.read("AndroidManifest.xml")
-                text = data.decode("latin-1", errors="ignore")
+    extension = os.path.splitext(path)[1].lower()
 
-                for p, score in PERMS.items():
+    if extension in SUSPICIOUS_EXTENSIONS:
 
-                    if p in text:
-                        r["permissions"].append(p)
-                        r["risk_score"] += score
+        result["suspicious"] = True
+        result["reason"] = "Suspicious file extension"
 
-            except Exception:
-                pass
-
-    except zipfile.BadZipFile:
-        r["reason"].append("Invalid APK/ZIP")
-        r["risk_score"] += 5
-
-    except Exception as e:
-        r["reason"].append("APK error: " + str(e))
-        r["risk_score"] += 5
-
-    if r["risk_score"] >= 8:
-        r["suspicious"] = True
-
-    return r
-
-
-# ============================================================
-# FILE ANALYZER
-# ============================================================
-
-def analyze_file(path):
-
-    if not os.path.isfile(path):
-        return None
-
-    h = sha256(path)
-
-    r = {
-        "file": path,
-        "sha256": h,
-        "confirmed_malware": False,
-        "suspicious": False,
-        "risk_score": 0,
-        "reason": []
-    }
-
-    # Known malware
-    if h in MALWARE:
-        r["confirmed_malware"] = True
-        r["suspicious"] = True
-        r["risk_score"] = 10
-        r["reason"].append("Known malicious SHA-256")
-        return r
-
-    # APK
-    if path.lower().endswith(".apk"):
-        return analyze_apk(path)
-
-    # Suspicious extensions
-    ext = os.path.splitext(path)[1].lower()
-
-    if ext in BAD_EXT:
-        r["suspicious"] = True
-        r["risk_score"] = 4
-        r["reason"].append("Suspicious executable extension")
-
-    return r
-
-
-# ============================================================
-# HISTORY
-# ============================================================
-
-def load_history():
-
-    try:
-        if os.path.exists(HISTORY):
-
-            with open(HISTORY, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-                if isinstance(data, list):
-                    return data
-
-    except Exception:
-        pass
-
-    return []
-
-
-def save_history(data):
-
-    try:
-        history = load_history()
-        history.insert(0, data)
-
-        with open(HISTORY, "w", encoding="utf-8") as f:
-            json.dump(
-                history[:MAX_HISTORY],
-                f,
-                indent=2,
-                ensure_ascii=False
-            )
-
-    except Exception:
-        pass
+    return result
 
 
 # ============================================================
 # SCAN PATHS
 # ============================================================
 
-def scan_paths():
+def get_scan_paths():
 
     paths = []
 
-    for p in (
-        "/storage/emulated/0",
-        "/sdcard"
-    ):
-        if os.path.exists(p):
-            paths.append(p)
+    storage = "/storage/emulated/0"
 
-    if not paths:
-        paths.append(BASE)
+    if os.path.exists(storage):
+
+        paths.append(storage)
+
+    elif os.path.exists("/sdcard"):
+
+        paths.append("/sdcard")
+
+    else:
+
+        paths.append(
+            os.path.dirname(
+                os.path.abspath(__file__)
+            )
+        )
 
     return paths
+
+
+# ============================================================
+# FILE COLLECTION
+# ============================================================
+
+def collect_files(stop_check):
+
+    files = []
+
+    for base in get_scan_paths():
+
+        if stop_check():
+            break
+
+        try:
+
+            for root, dirs, names in os.walk(base):
+
+                if stop_check():
+                    break
+
+                dirs[:] = [
+                    d for d in dirs
+                    if d not in {
+                        ".cache",
+                        ".thumbnails"
+                    }
+                ]
+
+                for name in names:
+
+                    if stop_check():
+                        break
+
+                    path = os.path.join(root, name)
+
+                    if os.path.isfile(path):
+
+                        files.append(path)
+
+        except Exception:
+
+            continue
+
+    return files
 
 
 # ============================================================
@@ -260,50 +198,21 @@ def scan_paths():
 class Scanner:
 
     def __init__(self, callback):
+
         self.callback = callback
-        self.stop = False
+        self.stop_requested = False
+
+    def stop(self):
+
+        self.stop_requested = True
 
     def scan(self):
 
-        start = time.time()
-        files = []
-        results = []
+        start_time = time.time()
 
-        # ----------------------------------------------------
-        # Collect files
-        # ----------------------------------------------------
-
-        for base in scan_paths():
-
-            if self.stop:
-                break
-
-            try:
-
-                for root, dirs, names in os.walk(base):
-
-                    if self.stop:
-                        break
-
-                    dirs[:] = [
-                        d for d in dirs
-                        if d not in (
-                            ".cache",
-                            ".thumbnails"
-                        )
-                    ]
-
-                    for name in names:
-
-                        if self.stop:
-                            break
-
-                        files.append(
-                            os.path.join(root, name)
-                        )
-
-            except Exception:
-                continue
+        files = collect_files(
+            lambda: self.stop_requested
+        )
 
         total = len(files)
 
@@ -311,33 +220,43 @@ class Scanner:
         threats = 0
         suspicious = 0
 
-        # ----------------------------------------------------
-        # Analyze
-        # ----------------------------------------------------
+        results = []
 
-        for i, path in enumerate(files):
+        if total == 0:
 
-            if self.stop:
+            self.callback(
+                "done",
+                0,
+                0,
+                0,
+                time.time() - start_time,
+                results
+            )
+
+            return
+
+        for index, path in enumerate(files):
+
+            if self.stop_requested:
                 break
 
-            r = analyze_file(path)
+            result = scan_file(path)
 
             scanned += 1
 
-            if r:
+            if result["threat"]:
 
-                if r["confirmed_malware"]:
-                    threats += 1
-                    results.append(r)
+                threats += 1
+                results.append(result)
 
-                elif r["suspicious"]:
-                    suspicious += 1
-                    results.append(r)
+            elif result["suspicious"]:
+
+                suspicious += 1
+                results.append(result)
 
             progress = (
-                ((i + 1) / total) * 100
-                if total else 100
-            )
+                (index + 1) / total
+            ) * 100
 
             self.callback(
                 "progress",
@@ -353,7 +272,7 @@ class Scanner:
             scanned,
             threats,
             suspicious,
-            time.time() - start,
+            time.time() - start_time,
             results
         )
 
@@ -381,18 +300,25 @@ class AntivirusUI(BoxLayout):
             Label(
                 text="[b]King Taj 👑[/b]",
                 markup=True,
-                font_size=dp(28),
+                font_size=dp(27),
                 size_hint_y=None,
                 height=dp(55)
             )
         )
 
+        # ----------------------------------------------------
+        # VERSION
+        # ----------------------------------------------------
+
         self.add_widget(
             Label(
-                text=f"{APP_NAME}  •  Version {VERSION}",
+                text=(
+                    f"{APP_NAME}\n"
+                    f"Version {VERSION}"
+                ),
                 font_size=dp(15),
                 size_hint_y=None,
-                height=dp(30)
+                height=dp(55)
             )
         )
 
@@ -448,41 +374,24 @@ class AntivirusUI(BoxLayout):
         self.add_widget(self.stats)
 
         # ----------------------------------------------------
-        # SCAN
+        # SCAN BUTTON
         # ----------------------------------------------------
 
-        self.scan_btn = Button(
+        self.scan_button = Button(
             text="🔍  SCAN DEVICE",
             font_size=dp(20),
             size_hint_y=None,
             height=dp(60)
         )
 
-        self.scan_btn.bind(
+        self.scan_button.bind(
             on_release=self.start_scan
         )
 
-        self.add_widget(self.scan_btn)
+        self.add_widget(self.scan_button)
 
         # ----------------------------------------------------
-        # HISTORY
-        # ----------------------------------------------------
-
-        history_btn = Button(
-            text="📋  SCAN HISTORY",
-            font_size=dp(17),
-            size_hint_y=None,
-            height=dp(50)
-        )
-
-        history_btn.bind(
-            on_release=self.show_history
-        )
-
-        self.add_widget(history_btn)
-
-        # ----------------------------------------------------
-        # RESULTS
+        # RESULT AREA
         # ----------------------------------------------------
 
         scroll = ScrollView()
@@ -499,23 +408,33 @@ class AntivirusUI(BoxLayout):
         )
 
         scroll.add_widget(self.result)
+
         self.add_widget(scroll)
 
         self.scanner = None
 
     # ========================================================
-    # START
+    # START SCAN
     # ========================================================
 
     def start_scan(self, instance):
 
-        if self.scanner:
+        if self.scanner is not None:
             return
 
-        self.scan_btn.disabled = True
+        self.scan_button.disabled = True
+
         self.progress.value = 0
         self.percent.text = "0%"
-        self.status.text = "Scanning..."
+
+        self.status.text = "Collecting files..."
+
+        self.stats.text = (
+            "Files scanned: 0\n"
+            "Threats: 0\n"
+            "Suspicious: 0"
+        )
+
         self.result.text = ""
 
         self.scanner = Scanner(
@@ -531,11 +450,7 @@ class AntivirusUI(BoxLayout):
     # CALLBACK
     # ========================================================
 
-    def scan_callback(
-        self,
-        event,
-        *args
-    ):
+    def scan_callback(self, event, *args):
 
         Clock.schedule_once(
             lambda dt: self.update_ui(
@@ -545,25 +460,32 @@ class AntivirusUI(BoxLayout):
         )
 
     # ========================================================
-    # UI UPDATE
+    # UPDATE UI
     # ========================================================
 
-    def update_ui(
-        self,
-        event,
-        *args
-    ):
+    def update_ui(self, event, *args):
 
         if event == "progress":
 
-            value, scanned, threats, suspicious, path = args
+            (
+                progress,
+                scanned,
+                threats,
+                suspicious,
+                path
+            ) = args
 
-            self.progress.value = value
-            self.percent.text = f"{value:.1f}%"
+            self.progress.value = progress
+
+            self.percent.text = (
+                f"{progress:.1f}%"
+            )
+
+            filename = os.path.basename(path)
 
             self.status.text = (
                 "Scanning: "
-                + os.path.basename(path)[:40]
+                + filename[:45]
             )
 
             self.stats.text = (
@@ -574,10 +496,17 @@ class AntivirusUI(BoxLayout):
 
         elif event == "done":
 
-            scanned, threats, suspicious, elapsed, results = args
+            (
+                scanned,
+                threats,
+                suspicious,
+                elapsed,
+                results
+            ) = args
 
             self.scanner = None
-            self.scan_btn.disabled = False
+
+            self.scan_button.disabled = False
 
             self.progress.value = 100
             self.percent.text = "100%"
@@ -588,119 +517,76 @@ class AntivirusUI(BoxLayout):
                 f"Suspicious: {suspicious}"
             )
 
-            if threats:
-                self.status.text = "⚠️ THREATS DETECTED"
+            if threats > 0:
 
-            elif suspicious:
-                self.status.text = "⚠️ Suspicious files found"
+                self.status.text = (
+                    "⚠️ THREATS DETECTED"
+                )
+
+            elif suspicious > 0:
+
+                self.status.text = (
+                    "⚠️ Suspicious files found"
+                )
 
             else:
-                self.status.text = "✓ No known threats found"
 
-            lines = [
-                "========== SCAN RESULT ==========",
-                f"Files scanned : {scanned}",
-                f"Threats       : {threats}",
-                f"Suspicious    : {suspicious}",
-                f"Scan time     : {elapsed:.1f} seconds",
-                ""
-            ]
+                self.status.text = (
+                    "✓ No known threats found"
+                )
 
-            for r in results[:30]:
+            lines = []
+
+            lines.append(
+                "========== SCAN RESULT =========="
+            )
+
+            lines.append(
+                f"Files scanned : {scanned}"
+            )
+
+            lines.append(
+                f"Threats       : {threats}"
+            )
+
+            lines.append(
+                f"Suspicious    : {suspicious}"
+            )
+
+            lines.append(
+                f"Scan time     : {elapsed:.1f} seconds"
+            )
+
+            lines.append("")
+
+            for result in results[:20]:
 
                 lines.append(
-                    "File: " + r.get("file", "Unknown")
+                    "File: "
+                    + result["file"]
                 )
 
                 lines.append(
-                    "SHA256: " + str(
-                        r.get("sha256", "N/A")
+                    "SHA256: "
+                    + str(
+                        result["sha256"]
                     )
                 )
 
                 lines.append(
-                    "Risk score: " + str(
-                        r.get("risk_score", 0)
-                    )
+                    "Reason: "
+                    + result["reason"]
                 )
-
-                for reason in r.get("reason", []):
-                    lines.append(
-                        "Reason: " + reason
-                    )
-
-                if r.get("permissions"):
-                    lines.append(
-                        "Permissions: "
-                        + ", ".join(
-                            r["permissions"]
-                        )
-                    )
 
                 lines.append("")
 
+            if not results:
+
+                lines.append(
+                    "No suspicious files detected."
+                )
+
             self.result.text = "\n".join(lines)
-
-            save_history({
-                "date": datetime.now().strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                ),
-                "files": scanned,
-                "threats": threats,
-                "suspicious": suspicious,
-                "time": round(elapsed, 2)
-            })
-
-    # ========================================================
-    # HISTORY
-    # ========================================================
-
-    def show_history(self, instance):
-
-        history = load_history()
-
-        if not history:
-            text = "No scan history available."
-
-        else:
-
-            lines = [
-                "========== SCAN HISTORY ==========",
-                ""
-            ]
-
-            for x in history[:50]:
-
-                lines += [
-                    f"Date: {x.get('date', 'N/A')}",
-                    f"Files: {x.get('files', 0)}",
-                    f"Threats: {x.get('threats', 0)}",
-                    f"Suspicious: {x.get('suspicious', 0)}",
-                    f"Time: {x.get('time', 0)} sec",
-                    ""
-                ]
-
-            text = "\n".join(lines)
-
-        label = Label(
-            text=text,
-            size_hint_y=None,
-            halign="left",
-            valign="top"
-        )
-
-        label.bind(
-            texture_size=label.setter("size")
-        )
-
-        scroll = ScrollView()
-        scroll.add_widget(label)
-
-        Popup(
-            title="Scan History",
-            content=scroll,
-            size_hint=(0.92, 0.85)
-        ).open()
 
 
 # ============================================================
@@ -712,6 +598,7 @@ class V16AntivirusApp(App):
     title = APP_NAME
 
     def build(self):
+
         return AntivirusUI()
 
 
@@ -720,4 +607,5 @@ class V16AntivirusApp(App):
 # ============================================================
 
 if __name__ == "__main__":
+
     V16AntivirusApp().run()
