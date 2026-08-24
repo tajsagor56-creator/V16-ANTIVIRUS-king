@@ -23,7 +23,7 @@ jobs:
 
 
       # ======================================================
-      # 02 - PYTHON 3.12
+      # 02 - PYTHON
       # ======================================================
 
       - name: 02 - Setup Python 3.12
@@ -33,7 +33,7 @@ jobs:
 
 
       # ======================================================
-      # 03 - JAVA 17
+      # 03 - JAVA
       # ======================================================
 
       - name: 03 - Setup Java 17
@@ -49,22 +49,19 @@ jobs:
 
       - name: 04 - Install system packages
         run: |
+
           sudo apt-get update
 
           sudo apt-get install -y \
             git \
             zip \
             unzip \
-            openjdk-17-jdk \
-            python3-pip \
-            python3-virtualenv \
             autoconf \
             libtool \
             pkg-config \
             zlib1g-dev \
             libncurses5-dev \
             libncursesw5-dev \
-            libtinfo6 \
             cmake \
             libffi-dev \
             libssl-dev \
@@ -74,67 +71,109 @@ jobs:
 
 
       # ======================================================
-      # 05 - VERIFY PYTHON / JAVA
+      # 05 - CREATE VENV
       # ======================================================
 
-      - name: 05 - Verify environment
+      - name: 05 - Create virtual environment
         run: |
-          python --version
-          python3 --version
-          java -version
-          javac -version
+
+          python -m venv .venv
+
+          . .venv/bin/activate
+
+          python -m pip install --upgrade pip
 
 
       # ======================================================
-      # 06 - INSTALL BUILD DEPENDENCIES
+      # 06 - BUILD DEPENDENCIES
       # ======================================================
 
       - name: 06 - Install Buildozer
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install "Cython<3"
-          python -m pip install buildozer
+
+          . .venv/bin/activate
+
+          python -m pip install \
+            "setuptools<76" \
+            "wheel==0.43.0" \
+            "cython<3" \
+            "appdirs" \
+            "colorama>=0.3.3" \
+            "jinja2" \
+            "sh>=2,<3.0" \
+            "meson" \
+            "ninja" \
+            "build" \
+            "toml" \
+            "packaging"
+
+          python -m pip install \
+            "buildozer==1.6.0"
 
 
       # ======================================================
-      # 07 - CLEAN OLD BUILD
+      # 07 - VERIFY
       # ======================================================
 
-      - name: 07 - Clean Buildozer
+      - name: 07 - Verify environment
         run: |
+
+          . .venv/bin/activate
+
+          echo "===== PYTHON ====="
+          python --version
+
+          echo "===== BUILDOZER ====="
+          buildozer --version
+
+          echo "===== JAVA ====="
+          java -version
+
+
+      # ======================================================
+      # 08 - CLEAN
+      # ======================================================
+
+      - name: 08 - Clean old build
+        run: |
+
           rm -rf .buildozer
           rm -rf bin
 
 
       # ======================================================
-      # 08 - BUILD APK
+      # 09 - BUILD APK
       # ======================================================
 
-      - name: 08 - Build APK
-        env:
-          PIP_DISABLE_PIP_VERSION_CHECK: "1"
-          PYTHONNOUSERSITE: "1"
+      - name: 09 - Build APK
         run: |
+
+          . .venv/bin/activate
+
           buildozer -v android debug
 
 
       # ======================================================
-      # 09 - SHOW APK
+      # 10 - SHOW APK
       # ======================================================
 
-      - name: 09 - Show APK
+      - name: 10 - Show APK
         run: |
-          echo "===== APK FILES ====="
+
+          echo "========================================"
+          echo "V16 APK FILE"
+          echo "========================================"
+
           find bin -type f -name "*.apk" -print
 
 
       # ======================================================
-      # 10 - UPLOAD APK
+      # 11 - UPLOAD APK
       # ======================================================
 
-      - name: 10 - Upload APK
+      - name: 11 - Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: V16-Antivirus-Pro-APK
+          name: V16-Antivirus-Pro-16.4
           path: bin/*.apk
           if-no-files-found: error
